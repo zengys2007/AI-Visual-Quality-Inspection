@@ -23,26 +23,38 @@ import numpy as np
 # 是否启用预处理；False 时原样返回，便于做「原图 baseline」对照
 ENABLE_PREPROCESS: bool = True
 
-# ---------- LAB-CLAHE（主配方，建议默认开启）----------
-# 只在 L（亮度）通道做自适应直方图均衡，抬局部对比、压光照不均
+# ---------- 双边滤波去噪（先做，压涂层颗粒 / JPEG 噪点，尽量保住裂纹边）----------
+ENABLE_DENOISE: bool = True
+DENOISE_DIAMETER: int = 7              # 邻域直径，奇数；5～9
+DENOISE_SIGMA_COLOR: float = 45.0      # 颜色空间 sigma；越大越平滑
+DENOISE_SIGMA_SPACE: float = 45.0      # 坐标空间 sigma
+
+# ---------- LAB-CLAHE（宜弱，过强会把噪声当对比度抬起来）----------
+# 只在 L（亮度）通道做自适应直方图均衡
 ENABLE_CLAHE: bool = True
-CLAHE_CLIP_LIMIT: float = 2.0          # 对比度限制；越大裂纹越“黑”，过大易放大涂层噪声
-CLAHE_TILE_SIZE: int = 8               # 分块边长（像素）；常用 8
+CLAHE_CLIP_LIMIT: float = 1.4          # 对比度限制；1.2～1.6 较稳，>2 易出沙粒感
+CLAHE_TILE_SIZE: int = 16              # 分块边长；比 8 大，减少局部噪声被放大
 
-# ---------- 反锐化 Unsharp（主配方，建议默认开启）----------
-# 弥补 JPEG 发糊，让细裂纹边缘更清晰
-ENABLE_UNSHARP: bool = True
-UNSHARP_AMOUNT: float = 1.35           # 锐化强度，建议 1.2～1.5；>1.6 易出假纹
-UNSHARP_SIGMA: float = 3.0             # 高斯模糊 sigma；核大小用 (0,0) 由 sigma 自动决定
+# ---------- 反锐化 Unsharp（默认关：会放大噪点；裂纹靠黑帽拉黑）----------
+ENABLE_UNSHARP: bool = False
+UNSHARP_AMOUNT: float = 1.12           # 若重开，用很弱的 1.08～1.15
+UNSHARP_SIGMA: float = 2.0
 
-# ---------- 黑帽 Black-hat（可选加强；主配方 Recall 不够再开）----------
-# 形态学闭运算减原图，突出比邻域更暗的细缝；假阳也会升，务必做 val 对照
-ENABLE_BLACKHAT: bool = False
-BLACKHAT_KERNEL_SIZE: int = 17         # 椭圆核边长，奇数，建议 15～21
-BLACKHAT_ALPHA: float = 1.0            # 叠回权重 α，建议 0.8～1.5
+# ---------- 黑帽 Black-hat（专门抠暗裂纹，默认开）----------
+# close(gray)-gray；只把响应超过阈值的像素叠回去，避免细沙被当裂纹
+ENABLE_BLACKHAT: bool = True
+BLACKHAT_KERNEL_SIZE: int = 21         # 椭圆核边长，奇数，建议 17～25
+BLACKHAT_ALPHA: float = 1.8            # 叠回权重；越大裂纹越黑
+BLACKHAT_THRESHOLD: int = 12           # 黑帽响应低于此值不叠（0 表示全叠）
+BLACKHAT_OPEN_SIZE: int = 3            # 对掩膜做开运算去孤立点；1 或 0 表示关闭
 
 # ---------- 批量离线烘焙默认路径（可被命令行覆盖）----------
-DEFAULT_INPUT_DIR: str = r"data/测试集"
+# 相对路径一律相对「项目根目录」，不依赖你从哪个文件夹启动脚本
+#
+# 注意：本仓库文件夹名与常见习惯相反——
+#   data/训练集  = 640 张无实例标签图（默认批量增强这批）
+#   data/测试集  = 160 张带多边形标注（做有监督 train/val 时请改成这个目录）
+DEFAULT_INPUT_DIR: str = r"data/训练集"
 DEFAULT_OUTPUT_DIR: str = r"data/yolo/images_enhanced"
 IMAGE_SUFFIXES: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp")
 
@@ -52,11 +64,31 @@ IMAGE_SUFFIXES: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp")
 
 PathLike = Union[str, Path]
 
+# 本文件在 src/preprocess.py → 项目根 = 上一级目录
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def resolve_path(path: PathLike) -> Path:
+    """
+    把路径解析为绝对路径。
+
+    - 已是绝对路径：直接返回
+    - 相对路径：相对项目根目录解析（不是相对当前工作目录）
+    """
+    p = Path(path)
+    if p.is_absolute():
+        return p
+    return (_PROJECT_ROOT / p).resolve()
+
 
 def get_preprocess_config() -> dict:
     """返回当前生效的预处理参数快照（写日志 / 方案用）。"""
     return {
         "ENABLE_PREPROCESS": ENABLE_PREPROCESS,
+        "ENABLE_DENOISE": ENABLE_DENOISE,
+        "DENOISE_DIAMETER": DENOISE_DIAMETER,
+        "DENOISE_SIGMA_COLOR": DENOISE_SIGMA_COLOR,
+        "DENOISE_SIGMA_SPACE": DENOISE_SIGMA_SPACE,
         "ENABLE_CLAHE": ENABLE_CLAHE,
         "CLAHE_CLIP_LIMIT": CLAHE_CLIP_LIMIT,
         "CLAHE_TILE_SIZE": CLAHE_TILE_SIZE,
@@ -66,7 +98,22 @@ def get_preprocess_config() -> dict:
         "ENABLE_BLACKHAT": ENABLE_BLACKHAT,
         "BLACKHAT_KERNEL_SIZE": BLACKHAT_KERNEL_SIZE,
         "BLACKHAT_ALPHA": BLACKHAT_ALPHA,
+        "BLACKHAT_THRESHOLD": BLACKHAT_THRESHOLD,
+        "BLACKHAT_OPEN_SIZE": BLACKHAT_OPEN_SIZE,
     }
+
+
+def _apply_denoise(
+    bgr: np.ndarray,
+    diameter: int,
+    sigma_color: float,
+    sigma_space: float,
+) -> np.ndarray:
+    """双边滤波：平滑平坦涂层，保留裂纹等强边缘。"""
+    d = int(diameter)
+    if d % 2 == 0:
+        d += 1
+    return cv2.bilateralFilter(bgr, d, float(sigma_color), float(sigma_space))
 
 
 def _apply_clahe_lab(bgr: np.ndarray, clip_limit: float, tile: int) -> np.ndarray:
@@ -85,10 +132,16 @@ def _apply_unsharp(bgr: np.ndarray, amount: float, sigma: float) -> np.ndarray:
     return cv2.addWeighted(bgr, float(amount), blur, 1.0 - float(amount), 0)
 
 
-def _apply_blackhat(bgr: np.ndarray, kernel_size: int, alpha: float) -> np.ndarray:
+def _apply_blackhat(
+    bgr: np.ndarray,
+    kernel_size: int,
+    alpha: float,
+    threshold: int,
+    open_size: int,
+) -> np.ndarray:
     """
     黑帽：close(gray) - gray，再按权重从彩色图中减去，使暗裂纹更黑。
-    几何不变，仅改变像素值。
+    threshold>0 时只叠响应较强的像素；open_size>=3 时对掩膜开运算，去掉孤立沙粒。
     """
     k = int(kernel_size)
     if k % 2 == 0:
@@ -96,7 +149,15 @@ def _apply_blackhat(bgr: np.ndarray, kernel_size: int, alpha: float) -> np.ndarr
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, kernel)
-    # 扩展为三通道后按 α 从各通道减去
+    if int(threshold) > 0:
+        _, keep = cv2.threshold(blackhat, int(threshold), 255, cv2.THRESH_BINARY)
+        osz = int(open_size)
+        if osz >= 3:
+            if osz % 2 == 0:
+                osz += 1
+            open_k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (osz, osz))
+            keep = cv2.morphologyEx(keep, cv2.MORPH_OPEN, open_k)
+        blackhat = cv2.bitwise_and(blackhat, keep)
     bh = cv2.cvtColor(blackhat, cv2.COLOR_GRAY2BGR).astype(np.float32)
     out = bgr.astype(np.float32) - float(alpha) * bh
     return np.clip(out, 0, 255).astype(np.uint8)
@@ -106,6 +167,10 @@ def enhance_crack(
     bgr: np.ndarray,
     *,
     enable: Optional[bool] = None,
+    enable_denoise: Optional[bool] = None,
+    denoise_d: Optional[int] = None,
+    denoise_sigma_color: Optional[float] = None,
+    denoise_sigma_space: Optional[float] = None,
     enable_clahe: Optional[bool] = None,
     clip_limit: Optional[float] = None,
     tile: Optional[int] = None,
@@ -115,21 +180,14 @@ def enhance_crack(
     enable_blackhat: Optional[bool] = None,
     blackhat_kernel: Optional[int] = None,
     blackhat_alpha: Optional[float] = None,
+    blackhat_threshold: Optional[int] = None,
+    blackhat_open: Optional[int] = None,
 ) -> np.ndarray:
     """
     裂纹可见性增强（主入口）。
 
-    默认流水线：BGR → LAB-CLAHE → BGR → 反锐化 →（可选）黑帽融合。
+    默认流水线：BGR → 双边去噪 → 弱 CLAHE → 阈值黑帽（反锐化默认关闭）。
     未传入的关键字参数一律使用文件顶部配置区的默认值。
-
-    参数
-    ----
-    bgr : HxWx3 uint8，OpenCV BGR 图像
-    其余关键字 : 覆盖顶部配置；一般调用方不要改，保证训推一致
-
-    返回
-    ----
-    与输入同 shape、同 dtype 的 uint8 BGR 图
     """
     if bgr is None or not isinstance(bgr, np.ndarray) or bgr.ndim != 3 or bgr.shape[2] != 3:
         raise ValueError("enhance_crack 需要 HxWx3 的 BGR uint8 图像")
@@ -138,28 +196,38 @@ def enhance_crack(
     if not use:
         return bgr.copy()
 
+    do_denoise = ENABLE_DENOISE if enable_denoise is None else enable_denoise
     do_clahe = ENABLE_CLAHE if enable_clahe is None else enable_clahe
     do_unsharp = ENABLE_UNSHARP if enable_unsharp is None else enable_unsharp
     do_bh = ENABLE_BLACKHAT if enable_blackhat is None else enable_blackhat
 
     out = bgr
+    if do_denoise:
+        out = _apply_denoise(
+            out,
+            denoise_d if denoise_d is not None else DENOISE_DIAMETER,
+            denoise_sigma_color if denoise_sigma_color is not None else DENOISE_SIGMA_COLOR,
+            denoise_sigma_space if denoise_sigma_space is not None else DENOISE_SIGMA_SPACE,
+        )
     if do_clahe:
         out = _apply_clahe_lab(
             out,
             clip_limit if clip_limit is not None else CLAHE_CLIP_LIMIT,
             tile if tile is not None else CLAHE_TILE_SIZE,
         )
-    if do_unsharp:
-        out = _apply_unsharp(
-            out,
-            sharp if sharp is not None else UNSHARP_AMOUNT,
-            sigma if sigma is not None else UNSHARP_SIGMA,
-        )
     if do_bh:
         out = _apply_blackhat(
             out,
             blackhat_kernel if blackhat_kernel is not None else BLACKHAT_KERNEL_SIZE,
             blackhat_alpha if blackhat_alpha is not None else BLACKHAT_ALPHA,
+            blackhat_threshold if blackhat_threshold is not None else BLACKHAT_THRESHOLD,
+            blackhat_open if blackhat_open is not None else BLACKHAT_OPEN_SIZE,
+        )
+    if do_unsharp:
+        out = _apply_unsharp(
+            out,
+            sharp if sharp is not None else UNSHARP_AMOUNT,
+            sigma if sigma is not None else UNSHARP_SIGMA,
         )
 
     # 尺寸必须与原图一致，否则标签 / CSV 坐标会错位
@@ -174,7 +242,7 @@ def enhance_crack_file(src: PathLike, dst: Optional[PathLike] = None) -> np.ndar
 
     返回增强后的 BGR 数组。读失败抛 FileNotFoundError / RuntimeError。
     """
-    src_path = Path(src)
+    src_path = resolve_path(src)
     # Windows 下中文路径用 imdecode，避免 cv2.imread 失败
     data = np.fromfile(str(src_path), dtype=np.uint8)
     bgr = cv2.imdecode(data, cv2.IMREAD_COLOR)
@@ -184,7 +252,7 @@ def enhance_crack_file(src: PathLike, dst: Optional[PathLike] = None) -> np.ndar
     enhanced = enhance_crack(bgr)
 
     if dst is not None:
-        dst_path = Path(dst)
+        dst_path = resolve_path(dst)
         dst_path.parent.mkdir(parents=True, exist_ok=True)
         ext = dst_path.suffix.lower() or ".jpg"
         ok, buf = cv2.imencode(ext, enhanced)
@@ -197,9 +265,13 @@ def enhance_crack_file(src: PathLike, dst: Optional[PathLike] = None) -> np.ndar
 
 def list_images(directory: PathLike) -> list[Path]:
     """列出目录下常见图像文件（不递归），按文件名排序。"""
-    root = Path(directory)
+    root = resolve_path(directory)
     if not root.is_dir():
-        raise FileNotFoundError(f"目录不存在: {root}")
+        raise FileNotFoundError(
+            f"目录不存在: {root}\n"
+            f"（相对路径按项目根解析: {_PROJECT_ROOT}；"
+            f"当前工作目录: {Path.cwd()}）"
+        )
     files = [
         p
         for p in root.iterdir()
@@ -219,8 +291,8 @@ def bake_directory(
 
     names 不为空时只处理给定文件名集合。返回成功写出的张数。
     """
-    in_root = Path(input_dir)
-    out_root = Path(output_dir)
+    in_root = resolve_path(input_dir)
+    out_root = resolve_path(output_dir)
     out_root.mkdir(parents=True, exist_ok=True)
 
     images = list_images(in_root)
@@ -273,7 +345,7 @@ def main() -> None:
 
     # 单张
     if args.input:
-        src = Path(args.input)
+        src = resolve_path(args.input)
         data = np.fromfile(str(src), dtype=np.uint8)
         bgr = cv2.imdecode(data, cv2.IMREAD_COLOR)
         if bgr is None:
@@ -281,12 +353,13 @@ def main() -> None:
         enh = enhance_crack(bgr)
 
         if args.output:
-            enhance_crack_file(src, args.output)
-            print(f"已写出增强图: {args.output}")
+            out_path = resolve_path(args.output)
+            enhance_crack_file(src, out_path)
+            print(f"已写出增强图: {out_path}")
 
         if args.compare:
             strip = make_compare_strip(bgr, enh)
-            cmp_path = Path(args.compare)
+            cmp_path = resolve_path(args.compare)
             cmp_path.parent.mkdir(parents=True, exist_ok=True)
             ok, buf = cv2.imencode(cmp_path.suffix or ".jpg", strip)
             if not ok:
@@ -298,9 +371,9 @@ def main() -> None:
             print(f"增强完成 shape={enh.shape} dtype={enh.dtype}（未指定 -o / --compare，未写盘）")
         return
 
-    # 批量
-    in_dir = args.input_dir or DEFAULT_INPUT_DIR
-    out_dir = args.output_dir or DEFAULT_OUTPUT_DIR
+    # 批量（未传参数时用顶部默认路径，相对项目根）
+    in_dir = resolve_path(args.input_dir or DEFAULT_INPUT_DIR)
+    out_dir = resolve_path(args.output_dir or DEFAULT_OUTPUT_DIR)
     n = bake_directory(in_dir, out_dir)
     print(f"批量增强完成: {n} 张 -> {out_dir}")
     print("当前配置:", get_preprocess_config())
