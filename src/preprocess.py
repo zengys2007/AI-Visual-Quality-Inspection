@@ -26,12 +26,12 @@ ENABLE_PREPROCESS: bool = True
 # ---------- 双边滤波去噪（先做，压涂层颗粒 / JPEG 噪点，尽量保住裂纹边）----------
 ENABLE_DENOISE: bool = True
 DENOISE_DIAMETER: int = 7              # 邻域直径，奇数；5～9
-DENOISE_SIGMA_COLOR: float = 45.0      # 颜色空间 sigma；越大越平滑
+DENOISE_SIGMA_COLOR: float = 80.0      # 颜色空间 sigma；越大越平滑
 DENOISE_SIGMA_SPACE: float = 45.0      # 坐标空间 sigma
 
 # ---------- LAB-CLAHE（宜弱，过强会把噪声当对比度抬起来）----------
 # 只在 L（亮度）通道做自适应直方图均衡
-ENABLE_CLAHE: bool = True
+ENABLE_CLAHE: bool = False
 CLAHE_CLIP_LIMIT: float = 1.4          # 对比度限制；1.2～1.6 较稳，>2 易出沙粒感
 CLAHE_TILE_SIZE: int = 16              # 分块边长；比 8 大，减少局部噪声被放大
 
