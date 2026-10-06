@@ -1,0 +1,6 @@
+# 由 prepare_yolo_data.py 生成
+path: C:/Users/Smart.Wu/PycharmProjects/AI-Visual-Quality-Inspection/data/yolo
+train: images/train
+val: images/val
+nc: 1
+names: ['Surface_Crack']
