@@ -30,4 +30,5 @@ if __name__ == "__main__":
         imgsz=640,
         project=str(ROOT / "runs" / "segment"),
         name="surface_crack",
+        exist_ok=True,
     )
