@@ -1,0 +1,14 @@
+# 电池包表面裂纹实例分割数据集（YOLO segment / 多边形）
+#
+# path 相对于「运行训练时的当前目录」（请在项目根目录执行 train.py）
+# train: 已标注样本（整理后放在 data/yolo/）
+# val:   验证集 data/test/（图片与同名 .txt 标注放一起）
+#
+# 标签格式: class_id x1 y1 x2 y2 ... xn yn（归一化多边形顶点）
+
+path: data
+train: yolo/images/train
+val: test
+
+names:
+  0: Surface_Crack
