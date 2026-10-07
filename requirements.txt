@@ -1,0 +1,7 @@
+# AI-Visual-Quality-Inspection
+# 安装: pip install -r requirements.txt
+#
+# GPU（可选，推荐先装 CUDA 版 PyTorch，再装本文件）:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+
+ultralytics==8.4.173
