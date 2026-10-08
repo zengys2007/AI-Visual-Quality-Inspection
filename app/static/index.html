@@ -30,11 +30,11 @@
 
       <div class="toolbar">
         <div class="toolbar-group">
-          <label class="btn btn-primary">
+          <label class="btn btn-secondary">
             导入图像
             <input type="file" id="fileInput" accept="image/jpeg,image/png,image/bmp,image/webp" multiple hidden />
           </label>
-          <label class="btn btn-ghost">
+          <label class="btn btn-secondary">
             导入文件夹
             <input
               type="file"
@@ -46,12 +46,14 @@
               hidden
             />
           </label>
-          <button type="button" class="btn btn-ghost" id="clearBtn" disabled>清空</button>
+          <button type="button" class="btn btn-secondary" id="clearBtn" disabled>清空</button>
         </div>
         <div class="toolbar-group">
-          <button type="button" class="btn btn-accent" id="detectOneBtn" disabled>单张检测</button>
-          <button type="button" class="btn btn-accent" id="detectAllBtn" disabled>批量检测</button>
-          <button type="button" class="btn btn-primary" id="exportBtn" disabled>导出 CSV</button>
+          <div class="segmented" role="group" aria-label="检测模式">
+            <button type="button" class="seg-btn" id="detectOneBtn" disabled>单张检测</button>
+            <button type="button" class="seg-btn seg-primary" id="detectAllBtn" disabled>批量检测</button>
+          </div>
+          <button type="button" class="btn btn-secondary" id="exportBtn" disabled>导出 CSV</button>
         </div>
       </div>
 
@@ -85,9 +87,9 @@
             </div>
           </div>
           <div class="viewer-footer">
-            <span id="currentName">—</span>
-            <span id="currentVerdict" class="verdict">—</span>
-            <span id="currentTime">—</span>
+            <span class="file-name" id="currentName" title="">—</span>
+            <span id="currentVerdict" class="tag">—</span>
+            <span class="meta-mono" id="currentTime">—</span>
           </div>
         </section>
 

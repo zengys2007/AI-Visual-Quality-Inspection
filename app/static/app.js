@@ -229,8 +229,9 @@
       els.canvas.style.display = "none";
       els.placeholder.style.display = "grid";
       els.currentName.textContent = "—";
+      els.currentName.removeAttribute("title");
       els.currentVerdict.textContent = "—";
-      els.currentVerdict.className = "verdict";
+      els.currentVerdict.className = "tag";
       els.currentTime.textContent = "—";
       return;
     }
@@ -250,8 +251,8 @@
           const w = rec.x_max - rec.x_min;
           const h = rec.y_max - rec.y_min;
           ctx.lineWidth = Math.max(2, Math.round(img.naturalWidth / 400));
-          ctx.strokeStyle = "#c2410c";
-          ctx.fillStyle = "rgba(194, 65, 12, 0.14)";
+          ctx.strokeStyle = "#ff4d4f";
+          ctx.fillStyle = "rgba(255, 77, 79, 0.14)";
           ctx.fillRect(x, y, w, h);
           ctx.strokeRect(x, y, w, h);
 
@@ -260,7 +261,7 @@
           const pad = 4;
           const tw = ctx.measureText(label).width;
           const th = Math.max(16, Math.round(img.naturalWidth / 50));
-          ctx.fillStyle = "#c2410c";
+          ctx.fillStyle = "#ff4d4f";
           ctx.fillRect(x, Math.max(0, y - th - 2), tw + pad * 2, th + 2);
           ctx.fillStyle = "#fff";
           ctx.fillText(label, x + pad, Math.max(th - 4, y - 6));
@@ -272,18 +273,20 @@
     };
     img.src = image.url;
 
-    els.currentName.textContent = `${image.name} (${image.width}×${image.height})`;
+    const nameLabel = `${image.name}  ·  ${image.width}×${image.height}`;
+    els.currentName.textContent = nameLabel;
+    els.currentName.title = nameLabel;
     if (image.verdict === "pending") {
-      els.currentVerdict.textContent = "未检测";
-      els.currentVerdict.className = "verdict";
+      els.currentVerdict.textContent = "待检";
+      els.currentVerdict.className = "tag pending";
       els.currentTime.textContent = "—";
     } else if (image.verdict === "ok") {
       els.currentVerdict.textContent = "OK";
-      els.currentVerdict.className = "verdict ok";
+      els.currentVerdict.className = "tag ok";
       els.currentTime.textContent = `${image.inferenceMs} ms`;
     } else {
       els.currentVerdict.textContent = "NG";
-      els.currentVerdict.className = "verdict ng";
+      els.currentVerdict.className = "tag ng";
       els.currentTime.textContent = `${image.inferenceMs} ms`;
     }
   }
@@ -304,7 +307,7 @@
       item.className = `gallery-item${image.id === activeId ? " active" : ""}`;
       item.innerHTML = `
         <img src="${image.url}" alt="" />
-        <div class="name">${escapeHtml(image.name)}</div>
+        <div class="name" title="${escapeHtml(image.name)}">${escapeHtml(image.name)}</div>
         <span class="tag ${image.verdict}">${labelOf(image.verdict)}</span>
       `;
       item.addEventListener("click", () => {
