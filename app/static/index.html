@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>电池包视觉质检系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="titlebar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div class="brand-text">
+            <h1>电池包视觉质检系统</h1>
+            <p>Surface Crack Inspection · Mock UI</p>
+          </div>
+        </div>
+        <div class="titlebar-meta">
+          <span class="status-pill" id="connStatus">本地演示</span>
+          <span class="meta-text" id="sessionInfo">未导入图像</span>
+        </div>
+      </header>
+
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <label class="btn btn-primary">
+            导入图像
+            <input type="file" id="fileInput" accept="image/jpeg,image/png,image/bmp,image/webp" multiple hidden />
+          </label>
+          <label class="btn btn-ghost">
+            导入文件夹
+            <input
+              type="file"
+              id="folderInput"
+              accept="image/jpeg,image/png,image/bmp,image/webp"
+              webkitdirectory
+              directory
+              multiple
+              hidden
+            />
+          </label>
+          <button type="button" class="btn btn-ghost" id="clearBtn" disabled>清空</button>
+        </div>
+        <div class="toolbar-group">
+          <button type="button" class="btn btn-accent" id="detectOneBtn" disabled>单张检测</button>
+          <button type="button" class="btn btn-accent" id="detectAllBtn" disabled>批量检测</button>
+          <button type="button" class="btn btn-primary" id="exportBtn" disabled>导出 CSV</button>
+        </div>
+      </div>
+
+      <main class="workspace">
+        <aside class="panel gallery-panel">
+          <div class="panel-head">
+            <h2>图像列表</h2>
+            <span class="count-badge" id="imageCount">0</span>
+          </div>
+          <div class="gallery" id="gallery">
+            <div class="empty-state" id="galleryEmpty">
+              <strong>尚未导入</strong>
+              <span>支持 JPEG / PNG / BMP，可单张或整夹导入</span>
+            </div>
+          </div>
+        </aside>
+
+        <section class="panel viewer-panel">
+          <div class="panel-head">
+            <h2>检测预览</h2>
+            <div class="viewer-legend">
+              <span class="legend-item crack"><i></i>Surface_Crack</span>
+              <span class="legend-item ok"><i></i>Ok</span>
+            </div>
+          </div>
+          <div class="viewer-stage" id="viewerStage">
+            <canvas id="previewCanvas"></canvas>
+            <div class="viewer-placeholder" id="viewerPlaceholder">
+              <strong>选择左侧图像开始预览</strong>
+              <span>检测框与置信度将叠加在原图上显示</span>
+            </div>
+          </div>
+          <div class="viewer-footer">
+            <span id="currentName">—</span>
+            <span id="currentVerdict" class="verdict">—</span>
+            <span id="currentTime">—</span>
+          </div>
+        </section>
+
+        <aside class="panel result-panel">
+          <div class="panel-head">
+            <h2>检测结果</h2>
+            <span class="count-badge" id="resultCount">0</span>
+          </div>
+          <div class="result-summary" id="resultSummary">
+            <div class="stat">
+              <em id="statTotal">0</em>
+              <span>已检图像</span>
+            </div>
+            <div class="stat">
+              <em id="statNg">0</em>
+              <span>NG</span>
+            </div>
+            <div class="stat">
+              <em id="statOk">0</em>
+              <span>OK</span>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>image_id</th>
+                  <th>class</th>
+                  <th>conf</th>
+                  <th>box</th>
+                </tr>
+              </thead>
+              <tbody id="resultBody">
+                <tr class="empty-row">
+                  <td colspan="4">暂无结果，请先运行检测</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="hint">当前为 Mock 检测，结果仅用于界面演示，不接真实模型。</p>
+        </aside>
+      </main>
+
+      <footer class="statusbar">
+        <span id="statusMsg">就绪</span>
+        <span>导出规范：image_id,class_name,confidence,x_min,y_min,x_max,y_max,inference_time_ms</span>
+      </footer>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
