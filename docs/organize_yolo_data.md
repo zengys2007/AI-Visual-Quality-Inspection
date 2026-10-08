@@ -4,7 +4,7 @@
 
 用于把 Label Studio 导出的 YOLO 多边形标注整理进 Ultralytics **训练集**目录，并从 `data/train` 拉取对应图片。未标完全部图片也可以先整理、再训练。
 
-验证集固定为 `data/test/`，本脚本不处理验证集。
+验证集在 `data/yolo/images/val` + `labels/val`，本脚本不处理验证集。
 
 ## Label 导出后放哪里
 
@@ -33,11 +33,11 @@ data/yolo/labels/94755ed9-image_173.txt
 
 ### 验证集（手动，不走本脚本）
 
-验证集使用 `data/test/`：图片与同名 `.txt` 放在同一目录，例如：
+按 YOLO 官方结构分别放置，例如：
 
 ```text
-data/test/image_1.jpg
-data/test/image_1.txt
+data/yolo/images/val/image_1.jpg
+data/yolo/labels/val/image_1.txt
 ```
 
 ## 运行整理脚本
@@ -61,14 +61,15 @@ data/test/image_1.txt
 
 ```text
 data/
-  train/                 ← 原始训练图片库（脚本只从这里拷图）
-  test/                  ← 验证集（图片 + 同名 .txt）
+  train/                      ← 原始训练图片库（脚本只从这里拷图）
   yolo/
-    images/train/        ← 已标注训练图片
-    labels/train/        ← 已标注训练标签
+    images/train/             ← 训练图片
+    images/val/               ← 验证图片
+    labels/train/             ← 训练标签
+    labels/val/               ← 验证标签
 ```
 
-`configs/data.yaml`：`train` → `yolo/images/train`，`val` → `test`。
+`configs/data.yaml`：`path` → `data/yolo`，`train` → `images/train`，`val` → `images/val`。
 
 标注格式（YOLO segment 多边形，坐标归一化到 0~1）：
 
@@ -93,4 +94,4 @@ data/
 
 - 每次运行只处理 `labels/` **根目录**里尚未整理的 UUID 文件；已在 `train/` 中的样本不会被重复处理。
 - 原图目录 `data/train/` 不会被删除或移动，只做复制。
-- 验证集请直接维护 `data/test/` 下的图片与标注，不要放到 `data/yolo/labels/` 根目录走本脚本。
+- 验证集请直接维护 `images/val` 与 `labels/val`，不要放到 `data/yolo/labels/` 根目录走本脚本。

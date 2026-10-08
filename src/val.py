@@ -10,14 +10,28 @@ from pathlib import Path
 from ultralytics import YOLO
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# ── 配置（路径均为项目根下的绝对路径）─────────────────
+# 输入
 DATA_YAML = ROOT / "configs" / "data.yaml"
-# 推荐使用完整训练得到的 best.pt
-WEIGHTS = ROOT / "runs" / "segment" / "surface_crack-3" / "weights" / "best.pt"
+WEIGHTS = ROOT / "runs" / "segment" / "surface_crack" / "weights" / "best.pt"
+
+# 验证参数
+IMGSZ = 640
+BATCH = 16
+SPLIT = "val"
+PLOTS = True
+
+# 输出
+PROJECT = ROOT / "runs" / "segment"
+NAME = "surface_crack_val"
+EXIST_OK = True
+# ─────────────────────────────────────────────────────
 
 
 if __name__ == "__main__":
     # Windows 下以脚本启动验证时必须放在 __main__ 中，避免多进程 RuntimeError
-    # data.yaml 中 path 相对于当前工作目录，需在项目根目录下启动
+    # data.yaml 中 path 相对当前工作目录，需在项目根目录下启动
     import os
 
     os.chdir(ROOT)
@@ -27,20 +41,18 @@ if __name__ == "__main__":
             f"找不到权重: {WEIGHTS}\n请先完成训练，或修改 WEIGHTS 指向有效的 best.pt"
         )
 
-    # 加载自定义训练权重；模型会记住训练时的 data / imgsz 等设置
     model = YOLO(str(WEIGHTS))
 
-    # 在自定义数据集上验证；显式传入 data 以便覆盖/确认路径
     # 有 GPU 时自动使用，否则使用 CPU
     metrics = model.val(
         data=str(DATA_YAML),
-        imgsz=640,
-        batch=16,
-        split="val",
-        plots=True,
-        project=str(ROOT / "runs" / "segment"),
-        name="surface_crack_val",
-        exist_ok=True,
+        imgsz=IMGSZ,
+        batch=BATCH,
+        split=SPLIT,
+        plots=PLOTS,
+        project=str(PROJECT),
+        name=NAME,
+        exist_ok=EXIST_OK,
     )
 
     # Box 指标（外接框）

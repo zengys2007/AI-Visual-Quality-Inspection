@@ -10,25 +10,38 @@ from pathlib import Path
 from ultralytics import YOLO
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# ── 配置（路径均为项目根下的绝对路径）─────────────────
+# 输入
 DATA_YAML = ROOT / "configs" / "data.yaml"
+PRETRAINED = "yolo26n-seg.pt"  # 预训练分割模型（*-seg）
+
+# 训练参数
+EPOCHS = 100
+IMGSZ = 640
+
+# 输出
+PROJECT = ROOT / "runs" / "segment"
+NAME = "surface_crack"
+EXIST_OK = True
+# ─────────────────────────────────────────────────────
 
 
 if __name__ == "__main__":
     # Windows 下以脚本启动训练时必须放在 __main__ 中，避免多进程 RuntimeError
-    # data.yaml 中 path 相对于当前工作目录，需在项目根目录下启动
+    # data.yaml 中 path 相对当前工作目录，需在项目根目录下启动
     import os
 
     os.chdir(ROOT)
 
-    # 加载预训练分割模型（推荐用于训练；多边形/掩码任务用 *-seg）
-    model = YOLO("yolo26n-seg.pt")
+    model = YOLO(PRETRAINED)
 
-    # 在自定义数据集上训练；有 GPU 时自动使用 device=0，否则使用 CPU
+    # 有 GPU 时自动使用 device=0，否则使用 CPU
     results = model.train(
         data=str(DATA_YAML),
-        epochs=100,
-        imgsz=640,
-        project=str(ROOT / "runs" / "segment"),
-        name="surface_crack",
-        exist_ok=True,
+        epochs=EPOCHS,
+        imgsz=IMGSZ,
+        project=str(PROJECT),
+        name=NAME,
+        exist_ok=EXIST_OK,
     )

@@ -2,24 +2,29 @@
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from pathlib import Path
 
+# ── 配置（路径相对项目根目录）─────────────────────────
+# 输入：Label Studio 导出的 .txt 放在 labels 根目录；原图从 data/train 拉取
+# 验证集在 data/yolo/images/val + labels/val，本脚本不处理
+SRC_LABELS = Path("data/yolo/labels")
+IMG_DIRS = [Path("data/train")]
+
+# 输出：整理后的训练集
+OUT_IMG_TRAIN = Path("data/yolo/images/train")
+OUT_LBL_TRAIN = Path("data/yolo/labels/train")
+# ─────────────────────────────────────────────────────
+
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data"
-YOLO = DATA / "yolo"
-SRC_LABELS = YOLO / "labels"
-# 训练集原图只从 data/train 拉取；data/test 作为验证集，不并入 train
-IMG_DIRS = [DATA / "train"]
-
-OUT_IMG_TRAIN = YOLO / "images" / "train"
-OUT_LBL_TRAIN = YOLO / "labels" / "train"
-
 UUID_LABEL = re.compile(r"^[0-9a-fA-F]+-(image_\d+)\.txt$")
 
 
 def main() -> None:
+    os.chdir(ROOT)
+
     for d in (OUT_IMG_TRAIN, OUT_LBL_TRAIN):
         d.mkdir(parents=True, exist_ok=True)
 
