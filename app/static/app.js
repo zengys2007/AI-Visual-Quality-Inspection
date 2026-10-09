@@ -3,22 +3,31 @@
 
   const IMAGE_EXT = /\.(jpe?g|png|bmp|webp)$/i;
   const TEAM_NAME = "视觉检测团队";
+  /** 赛题二电池包：仅允许这两类；忽略窗帘布 Hole / Ink / Broken_Filament */
+  const CLASS_CRACK = "Surface_Crack";
+  const CLASS_OK = "Ok";
+  const CSV_HEADER =
+    "image_id,class_name,confidence,x_min,y_min,x_max,y_max,inference_time_ms";
 
   /** @type {{ id: string, name: string, url: string, width: number, height: number, records: object[] | null, verdict: 'pending'|'ok'|'ng', inferenceMs: number | null }[]} */
   let images = [];
   let activeId = null;
+  /** @type {Set<string>} 导出用多选集合（与预览 activeId 独立） */
+  let selectedIds = new Set();
   let busy = false;
 
   const els = {
     fileInput: document.getElementById("fileInput"),
     folderInput: document.getElementById("folderInput"),
     clearBtn: document.getElementById("clearBtn"),
+    selectAllBtn: document.getElementById("selectAllBtn"),
     detectOneBtn: document.getElementById("detectOneBtn"),
     detectAllBtn: document.getElementById("detectAllBtn"),
     exportBtn: document.getElementById("exportBtn"),
     gallery: document.getElementById("gallery"),
     galleryEmpty: document.getElementById("galleryEmpty"),
     imageCount: document.getElementById("imageCount"),
+    selectedInfo: document.getElementById("selectedInfo"),
     canvas: document.getElementById("previewCanvas"),
     placeholder: document.getElementById("viewerPlaceholder"),
     currentName: document.getElementById("currentName"),
@@ -62,6 +71,16 @@
     });
   }
 
+  async function commitImported(items) {
+    if (!items.length) {
+      setStatus("没有新增图像（可能与已导入文件重名）");
+      return;
+    }
+    if (!activeId) activeId = items[0].id;
+    renderAll();
+    setStatus(`已导入 ${items.length} 张图像`);
+  }
+
   async function importFiles(fileList) {
     const files = Array.from(fileList || []).filter((f) => IMAGE_EXT.test(f.name));
     if (!files.length) {
@@ -85,22 +104,131 @@
       }
     }
 
-    if (!added.length) {
-      setStatus("没有新增图像（可能与已导入文件重名）");
+    await commitImported(added);
+  }
+
+  /** 供 desktop.py 拖放桥接：接收 { name, size, lastModified, dataUrl } */
+  async function importDroppedImages(payload) {
+    const list = Array.isArray(payload) ? payload : [];
+    const entries = list.filter(
+      (item) => item && IMAGE_EXT.test(item.name || "") && item.dataUrl
+    );
+    if (!entries.length) {
+      setStatus("未找到可导入的图像文件");
       return;
     }
 
-    if (!activeId) activeId = added[0].id;
-    renderAll();
-    setStatus(`已导入 ${added.length} 张图像`);
+    const existing = new Set(images.map((i) => i.name));
+    const added = [];
+
+    for (const entry of entries) {
+      if (existing.has(entry.name)) continue;
+      try {
+        const item = await loadImageMeta(
+          {
+            name: entry.name,
+            size: entry.size || 0,
+            lastModified: entry.lastModified || Date.now(),
+          },
+          entry.dataUrl
+        );
+        images.push(item);
+        existing.add(entry.name);
+        added.push(item);
+      } catch {
+        /* skip unreadable */
+      }
+    }
+
+    await commitImported(added);
   }
 
-  function clearAll() {
-    images.forEach((img) => URL.revokeObjectURL(img.url));
-    images = [];
-    activeId = null;
+  window.importDroppedImages = importDroppedImages;
+  window.setStatusMessage = setStatus;
+  window.importImageFiles = importFiles;
+
+  function revokeImageUrl(url) {
+    if (url && String(url).startsWith("blob:")) URL.revokeObjectURL(url);
+  }
+
+  function selectedImages() {
+    return images.filter((img) => selectedIds.has(img.id));
+  }
+
+  function pruneSelection() {
+    const valid = new Set(images.map((img) => img.id));
+    selectedIds = new Set([...selectedIds].filter((id) => valid.has(id)));
+  }
+
+  function allSelected() {
+    return images.length > 0 && images.every((img) => selectedIds.has(img.id));
+  }
+
+  function selectAllImages() {
+    if (!images.length) return;
+    if (allSelected()) {
+      selectedIds.clear();
+      setStatus("已取消全选");
+    } else {
+      selectedIds = new Set(images.map((img) => img.id));
+      setStatus(`已全选 ${images.length} 张图像`);
+    }
     renderAll();
-    setStatus("已清空");
+  }
+
+  function toggleSelect(id) {
+    if (selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    renderAll();
+  }
+
+  function clearSelected() {
+    pruneSelection();
+    const chosen = selectedImages();
+    if (!chosen.length) {
+      setStatus("请先勾选要清空的图像，或点击「全选」");
+      return;
+    }
+
+    const removeIds = new Set(chosen.map((img) => img.id));
+    const removedCount = removeIds.size;
+
+    images.forEach((img) => {
+      if (removeIds.has(img.id)) revokeImageUrl(img.url);
+    });
+    images = images.filter((img) => !removeIds.has(img.id));
+    selectedIds.clear();
+
+    if (!images.length) {
+      activeId = null;
+    } else if (!images.some((img) => img.id === activeId)) {
+      activeId = images[0].id;
+    }
+
+    renderAll();
+    setStatus(
+      images.length
+        ? `已清空选中 ${removedCount} 张，剩余 ${images.length} 张`
+        : `已清空选中 ${removedCount} 张`
+    );
+  }
+
+  function removeImage(id) {
+    if (busy) return;
+    const idx = images.findIndex((img) => img.id === id);
+    if (idx < 0) return;
+
+    const [removed] = images.splice(idx, 1);
+    revokeImageUrl(removed.url);
+    selectedIds.delete(id);
+
+    if (activeId === id) {
+      const next = images[idx] || images[idx - 1] || null;
+      activeId = next ? next.id : null;
+    }
+
+    renderAll();
+    setStatus(`已删除: ${removed.name}`);
   }
 
   function hashName(name) {
@@ -121,7 +249,7 @@
         records: [
           {
             image_id: image.name,
-            class_name: "Ok",
+            class_name: CLASS_OK,
             confidence: -1,
             x_min: -1,
             y_min: -1,
@@ -143,7 +271,7 @@
       const conf = Math.round((0.55 + ((seed >> (i + 1)) % 40) / 100) * 100) / 100;
       records.push({
         image_id: image.name,
-        class_name: "Surface_Crack",
+        class_name: CLASS_CRACK,
         confidence: conf,
         x_min: xMin,
         y_min: yMin,
@@ -184,44 +312,147 @@
     );
   }
 
-  function exportCsv() {
-    const detected = images.filter((img) => img.records && img.records.length);
-    if (!detected.length) {
-      setStatus("没有可导出的检测结果");
+  function csvEscape(value) {
+    const s = String(value);
+    if (/[",\n\r]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
+    return s;
+  }
+
+  function formatCoord(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "-1";
+    if (Number.isInteger(n)) return String(n);
+    return String(Math.round(n * 10) / 10);
+  }
+
+  function formatTimeMs(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return "0";
+    return String(Math.round(n * 10) / 10);
+  }
+
+  function formatConfidence(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "0.00";
+    const clamped = Math.min(1, Math.max(0, n));
+    return clamped.toFixed(2);
+  }
+
+  /**
+   * 按 docs/接口规范.md 与附件1（赛题二电池包）生成一行一目标的 CSV 行。
+   * 有裂纹 → 仅 Surface_Crack 行；无裂纹 → 恰好一行 Ok 占位。
+   */
+  function buildRowsForImage(image) {
+    const imageId = image.name;
+    const tMs = formatTimeMs(
+      image.inferenceMs ??
+        image.records?.find((r) => r.inference_time_ms != null)?.inference_time_ms ??
+        0
+    );
+
+    const cracks = (image.records || []).filter(
+      (r) => r && r.class_name === CLASS_CRACK
+    );
+
+    if (!cracks.length) {
+      return [
+        [imageId, CLASS_OK, "-1", "-1", "-1", "-1", "-1", tMs].map(csvEscape).join(","),
+      ];
+    }
+
+    return cracks.map((rec) => {
+      let xMin = Number(rec.x_min);
+      let yMin = Number(rec.y_min);
+      let xMax = Number(rec.x_max);
+      let yMax = Number(rec.y_max);
+      if (!Number.isFinite(xMin)) xMin = 0;
+      if (!Number.isFinite(yMin)) yMin = 0;
+      if (!Number.isFinite(xMax)) xMax = xMin + 1;
+      if (!Number.isFinite(yMax)) yMax = yMin + 1;
+      if (xMax <= xMin) xMax = xMin + 1;
+      if (yMax <= yMin) yMax = yMin + 1;
+
+      return [
+        imageId,
+        CLASS_CRACK,
+        formatConfidence(rec.confidence),
+        formatCoord(xMin),
+        formatCoord(yMin),
+        formatCoord(xMax),
+        formatCoord(yMax),
+        tMs,
+      ]
+        .map(csvEscape)
+        .join(",");
+    });
+  }
+
+  /** @returns {{ csv: string, imageCount: number, rowCount: number } | null} */
+  function buildBatteryPackCsv(sourceImages) {
+    const detected = sourceImages.filter(
+      (img) => img.verdict !== "pending" && img.records
+    );
+    if (!detected.length) return null;
+
+    const body = [];
+    for (const img of detected) {
+      body.push(...buildRowsForImage(img));
+    }
+    return {
+      csv: [CSV_HEADER, ...body].join("\n") + "\n",
+      imageCount: detected.length,
+      rowCount: body.length,
+    };
+  }
+
+  function downloadCsvBlob(csvText, filename) {
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function exportCsv() {
+    pruneSelection();
+    const chosen = selectedImages();
+    if (!chosen.length) {
+      setStatus("请先勾选要导出的图像，或点击「全选」");
       return;
     }
 
-    const header =
-      "image_id,class_name,confidence,x_min,y_min,x_max,y_max,inference_time_ms";
-    const rows = [];
-    for (const img of detected) {
-      for (const rec of img.records) {
-        const conf =
-          rec.class_name === "Ok" ? "-1" : Number(rec.confidence).toFixed(2);
-        rows.push(
-          [
-            rec.image_id,
-            rec.class_name,
-            conf,
-            rec.x_min,
-            rec.y_min,
-            rec.x_max,
-            rec.y_max,
-            rec.inference_time_ms,
-          ].join(",")
-        );
+    const built = buildBatteryPackCsv(chosen);
+    if (!built) {
+      setStatus("选中的图像尚无检测结果，请先完成检测后再导出");
+      return;
+    }
+
+    const filename = `${TEAM_NAME}_检测结果.csv`;
+    const api = window.pywebview && window.pywebview.api;
+
+    if (api && typeof api.save_csv === "function") {
+      try {
+        const res = await api.save_csv(built.csv, filename);
+        if (res && res.ok) {
+          setStatus(
+            `已导出选中 ${built.imageCount} 张 / ${built.rowCount} 行 → ${res.path}`
+          );
+          return;
+        }
+        if (res && res.cancelled) {
+          setStatus("已取消导出");
+          return;
+        }
+      } catch {
+        /* 回退浏览器下载 */
       }
     }
 
-    const blob = new Blob([[header, ...rows].join("\n") + "\n"], {
-      type: "text/csv;charset=utf-8",
-    });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${TEAM_NAME}_检测结果.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    setStatus(`已导出 ${detected.length} 张图像的 CSV`);
+    downloadCsvBlob(built.csv, filename);
+    setStatus(
+      `已导出选中 ${built.imageCount} 张 / ${built.rowCount} 行 → ${filename}`
+    );
   }
 
   function drawPreview(image) {
@@ -292,7 +523,13 @@
   }
 
   function renderGallery() {
+    pruneSelection();
     els.imageCount.textContent = String(images.length);
+    if (els.selectedInfo) {
+      els.selectedInfo.textContent = selectedIds.size
+        ? `已选 ${selectedIds.size}`
+        : "未选中";
+    }
     els.gallery.querySelectorAll(".gallery-item").forEach((n) => n.remove());
 
     if (!images.length) {
@@ -302,17 +539,45 @@
     els.galleryEmpty.style.display = "none";
 
     for (const image of images) {
-      const item = document.createElement("button");
-      item.type = "button";
-      item.className = `gallery-item${image.id === activeId ? " active" : ""}`;
+      const checked = selectedIds.has(image.id);
+      const item = document.createElement("div");
+      item.className = `gallery-item${image.id === activeId ? " active" : ""}${
+        checked ? " selected" : ""
+      }`;
+      item.setAttribute("role", "button");
+      item.tabIndex = 0;
       item.innerHTML = `
+        <label class="gallery-check" title="选中以导出">
+          <input type="checkbox" ${checked ? "checked" : ""} aria-label="选中 ${escapeHtml(image.name)}" />
+        </label>
         <img src="${image.url}" alt="" />
         <div class="name" title="${escapeHtml(image.name)}">${escapeHtml(image.name)}</div>
         <span class="tag ${image.verdict}">${labelOf(image.verdict)}</span>
+        <button type="button" class="gallery-remove" title="删除此图像" aria-label="删除 ${escapeHtml(image.name)}">×</button>
       `;
       item.addEventListener("click", () => {
         activeId = image.id;
         renderAll();
+      });
+      item.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          activeId = image.id;
+          renderAll();
+        }
+      });
+      const check = item.querySelector(".gallery-check");
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      check.addEventListener("click", (e) => e.stopPropagation());
+      checkbox.addEventListener("change", (e) => {
+        e.stopPropagation();
+        toggleSelect(image.id);
+      });
+      const removeBtn = item.querySelector(".gallery-remove");
+      removeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        removeImage(image.id);
       });
       els.gallery.appendChild(item);
     }
@@ -376,11 +641,18 @@
   function setButtons() {
     const hasImages = images.length > 0;
     const hasActive = Boolean(activeImage());
-    const hasResults = images.some((img) => img.records);
-    els.clearBtn.disabled = !hasImages || busy;
+    const hasSelection = selectedIds.size > 0;
+    const canExport = selectedImages().some(
+      (img) => img.verdict !== "pending" && img.records
+    );
+    els.clearBtn.disabled = !hasSelection || busy;
+    if (els.selectAllBtn) {
+      els.selectAllBtn.disabled = !hasImages || busy;
+      els.selectAllBtn.textContent = allSelected() ? "取消全选" : "全选";
+    }
     els.detectOneBtn.disabled = !hasActive || busy;
     els.detectAllBtn.disabled = !hasImages || busy;
-    els.exportBtn.disabled = !hasResults || busy;
+    els.exportBtn.disabled = !canExport || busy;
     els.fileInput.disabled = busy;
     els.folderInput.disabled = busy;
   }
@@ -403,7 +675,10 @@
     e.target.value = "";
   });
 
-  els.clearBtn.addEventListener("click", clearAll);
+  els.clearBtn.addEventListener("click", clearSelected);
+  if (els.selectAllBtn) {
+    els.selectAllBtn.addEventListener("click", selectAllImages);
+  }
   els.detectOneBtn.addEventListener("click", () => {
     const img = activeImage();
     if (img) runDetect([img]);

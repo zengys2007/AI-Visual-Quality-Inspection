@@ -39,6 +39,23 @@ body {
   overflow: hidden;
 }
 
+body.is-dragging::after {
+  content: "释放以导入图像";
+  position: fixed;
+  inset: 12px;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  border: 2px dashed var(--primary);
+  border-radius: 12px;
+  background: rgba(22, 119, 255, 0.08);
+  color: var(--primary);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
 button,
 input,
 label {
@@ -317,6 +334,17 @@ label {
   font-weight: 650;
 }
 
+.panel-head-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-head-meta .meta-text {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .count-badge {
   min-width: 28px;
   text-align: center;
@@ -339,11 +367,12 @@ label {
 }
 
 .gallery-item {
+  position: relative;
   display: grid;
-  grid-template-columns: 56px 1fr auto;
+  grid-template-columns: 18px 56px 1fr auto;
   gap: 10px;
   align-items: center;
-  padding: 10px;
+  padding: 10px 28px 10px 10px;
   border: none;
   border-radius: var(--radius-sm);
   background: var(--panel-muted);
@@ -361,6 +390,67 @@ label {
 .gallery-item.active {
   background: var(--primary-soft);
   box-shadow: inset 0 0 0 1px rgba(22, 119, 255, 0.28), var(--shadow-sm);
+}
+
+.gallery-item.selected {
+  box-shadow: inset 0 0 0 1px rgba(22, 119, 255, 0.18);
+}
+
+.gallery-item.active.selected {
+  box-shadow: inset 0 0 0 1px rgba(22, 119, 255, 0.28), var(--shadow-sm);
+}
+
+.gallery-check {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.gallery-check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.gallery-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(26, 35, 50, 0.08);
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+
+.gallery-item:hover .gallery-remove,
+.gallery-item.active .gallery-remove {
+  opacity: 1;
+}
+
+.gallery-remove:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.gallery-remove:active {
+  background: #ffccc7;
 }
 
 .gallery-item img {

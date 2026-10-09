@@ -46,14 +46,15 @@
               hidden
             />
           </label>
-          <button type="button" class="btn btn-secondary" id="clearBtn" disabled>清空</button>
+          <button type="button" class="btn btn-secondary" id="clearBtn" disabled title="需先勾选图像；可先点「全选」再清空全部">清空</button>
+          <button type="button" class="btn btn-secondary" id="selectAllBtn" disabled>全选</button>
         </div>
         <div class="toolbar-group">
           <div class="segmented" role="group" aria-label="检测模式">
             <button type="button" class="seg-btn" id="detectOneBtn" disabled>单张检测</button>
             <button type="button" class="seg-btn seg-primary" id="detectAllBtn" disabled>批量检测</button>
           </div>
-          <button type="button" class="btn btn-secondary" id="exportBtn" disabled>导出 CSV</button>
+          <button type="button" class="btn btn-secondary" id="exportBtn" disabled title="需先选中已检测的图像">导出 CSV</button>
         </div>
       </div>
 
@@ -61,12 +62,15 @@
         <aside class="panel gallery-panel">
           <div class="panel-head">
             <h2>图像列表</h2>
-            <span class="count-badge" id="imageCount">0</span>
+            <div class="panel-head-meta">
+              <span class="meta-text" id="selectedInfo">未选中</span>
+              <span class="count-badge" id="imageCount">0</span>
+            </div>
           </div>
           <div class="gallery" id="gallery">
             <div class="empty-state" id="galleryEmpty">
               <strong>尚未导入</strong>
-              <span>支持 JPEG / PNG / BMP，可单张或整夹导入</span>
+              <span>支持 JPEG / PNG / BMP / WebP，可拖入桌面图片或整夹导入</span>
             </div>
           </div>
         </aside>
@@ -135,7 +139,7 @@
 
       <footer class="statusbar">
         <span id="statusMsg">就绪</span>
-        <span>导出规范：image_id,class_name,confidence,x_min,y_min,x_max,y_max,inference_time_ms</span>
+        <span>导出：团队名称_检测结果.csv · 赛题二 Surface_Crack / Ok · UTF-8 八列</span>
       </footer>
     </div>
     <script src="app.js"></script>
