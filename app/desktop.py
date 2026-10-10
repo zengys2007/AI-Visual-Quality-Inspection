@@ -1,25 +1,34 @@
 """电池包视觉质检 — pywebview 桌面壳入口。
 
-启动本地静态前端，窗口表现为桌面应用。本阶段检测为前端 mock，不调用 YOLO。
+启动本地静态前端，窗口表现为桌面应用。检测调用项目根目录 best.pt（YOLO-seg）。
 支持从资源管理器 / 桌面拖入图像文件或文件夹。
 """
 
 from __future__ import annotations
 
 import base64
+import binascii
 import ctypes
+import io
 import json
 import mimetypes
 import struct
 import sys
+import threading
 from pathlib import Path
 
 import webview
 from webview.dom import DOMEventHandler
 
 ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = ROOT.parent
 INDEX = ROOT / "static" / "index.html"
 BLANK_ICON = ROOT / "static" / "blank.ico"
+WEIGHTS = PROJECT_ROOT / "best.pt"
+
+# 与 src/predict.py 保持一致
+CONF = 0.223
+IMGSZ = 640
 
 # 与前端 --bg / background_color 一致
 BG_HEX = "#EEF1F5"
@@ -30,20 +39,79 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
 class Api:
-    """前端 JS 桥：保存符合接口规范的检测结果 CSV。"""
+    """前端 JS 桥：YOLO 检测 + 保存符合接口规范的检测结果 CSV。"""
 
     def __init__(self) -> None:
         self._window: webview.Window | None = None
+        self._model = None
+        self._model_lock = threading.Lock()
+        self._load_error: str | None = None
 
     def bind(self, window: webview.Window) -> None:
         self._window = window
+
+    def get_engine_status(self) -> dict:
+        """供前端显示当前推理引擎状态。"""
+        return {
+            "mode": "yolo",
+            "weights": str(WEIGHTS),
+            "weights_ok": WEIGHTS.is_file(),
+            "conf": CONF,
+            "imgsz": IMGSZ,
+            "model_loaded": self._model is not None,
+            "load_error": self._load_error,
+        }
+
+    def load_model(self) -> dict:
+        """预加载 YOLO 权重；可在窗口 loaded 后调用。"""
+        try:
+            self._ensure_model()
+        except Exception as exc:  # noqa: BLE001 — 透传给前端状态栏
+            self._load_error = str(exc)
+            return {"ok": False, "error": str(exc)}
+        self._load_error = None
+        return {
+            "ok": True,
+            "weights": str(WEIGHTS),
+            "conf": CONF,
+            "imgsz": IMGSZ,
+        }
+
+    def detect_image(self, payload: dict | None = None) -> dict:
+        """对单张图做 YOLO 推理，返回与接口规范一致的 records。"""
+        data = payload if isinstance(payload, dict) else {}
+        name = str(data.get("name") or "image.jpg")
+        path_raw = data.get("path")
+        data_url = data.get("dataUrl")
+
+        try:
+            model = self._ensure_model()
+            source = self._resolve_source(path_raw, data_url)
+            results = model.predict(
+                source=source,
+                conf=CONF,
+                imgsz=IMGSZ,
+                verbose=False,
+            )
+            result = results[0]
+            records = self._records_for_image(result, name)
+            verdict = "ok" if records and records[0]["class_name"] == "Ok" else "ng"
+            inference_ms = records[0]["inference_time_ms"] if records else 0.0
+            return {
+                "ok": True,
+                "verdict": verdict,
+                "inferenceMs": inference_ms,
+                "records": records,
+            }
+        except Exception as exc:  # noqa: BLE001 — 透传给前端
+            return {"ok": False, "error": str(exc)}
 
     def save_csv(self, content: str, filename: str) -> dict:
         """弹出另存为对话框，以 UTF-8 写入 CSV。"""
         if self._window is None:
             return {"ok": False, "error": "window not ready"}
 
-        default_name = filename or "视觉检测团队_检测结果.csv"
+        default_name = filename or "电池包裂纹_产线_班次_日期.csv"
         if not default_name.lower().endswith(".csv"):
             default_name += ".csv"
 
@@ -60,6 +128,82 @@ class Api:
         path.write_text(content, encoding="utf-8", newline="\n")
         return {"ok": True, "path": str(path)}
 
+    def _ensure_model(self):
+        with self._model_lock:
+            if self._model is not None:
+                return self._model
+            if not WEIGHTS.is_file():
+                raise FileNotFoundError(
+                    f"找不到权重: {WEIGHTS}\n请先完成训练并将 best.pt 放到项目根目录"
+                )
+            from ultralytics import YOLO
+
+            self._model = YOLO(str(WEIGHTS))
+            return self._model
+
+    @staticmethod
+    def _resolve_source(path_raw, data_url):
+        if path_raw:
+            path = Path(str(path_raw))
+            if path.is_file():
+                return str(path)
+        if not data_url:
+            raise ValueError("缺少图像数据（path 或 dataUrl）")
+        text = str(data_url)
+        if "," in text:
+            text = text.split(",", 1)[1]
+        try:
+            raw = base64.b64decode(text, validate=False)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError(f"无法解码图像 dataUrl: {exc}") from exc
+        from PIL import Image
+
+        return Image.open(io.BytesIO(raw)).convert("RGB")
+
+    @staticmethod
+    def _inference_time_ms(result) -> float:
+        speed = result.speed or {}
+        return float(
+            speed.get("preprocess", 0)
+            + speed.get("inference", 0)
+            + speed.get("postprocess", 0)
+        )
+
+    @classmethod
+    def _records_for_image(cls, result, image_id: str) -> list[dict]:
+        t_ms = round(cls._inference_time_ms(result), 1)
+        boxes = result.boxes
+        if boxes is None or len(boxes) == 0:
+            return [
+                {
+                    "image_id": image_id,
+                    "class_name": "Ok",
+                    "confidence": -1,
+                    "x_min": -1,
+                    "y_min": -1,
+                    "x_max": -1,
+                    "y_max": -1,
+                    "inference_time_ms": t_ms,
+                }
+            ]
+
+        rows: list[dict] = []
+        for xyxy, conf, cls_id in zip(boxes.xyxy, boxes.conf, boxes.cls):
+            x_min, y_min, x_max, y_max = (float(v) for v in xyxy)
+            name = result.names[int(cls_id)]
+            rows.append(
+                {
+                    "image_id": image_id,
+                    "class_name": name,
+                    "confidence": round(float(conf), 2),
+                    "x_min": round(x_min, 1),
+                    "y_min": round(y_min, 1),
+                    "x_max": round(x_max, 1),
+                    "y_max": round(y_max, 1),
+                    "inference_time_ms": t_ms,
+                }
+            )
+        return rows
 
 def _ensure_blank_icon() -> Path:
     """生成全透明 .ico，用于替换默认 Python / 系统窗口图标。"""
@@ -195,6 +339,7 @@ def _path_to_payload(path: Path) -> dict[str, object]:
         "name": path.name,
         "size": st.st_size,
         "lastModified": int(st.st_mtime * 1000),
+        "path": str(path.resolve()),
         "dataUrl": f"data:{mime};base64,{data}",
     }
 
@@ -294,6 +439,17 @@ def main() -> None:
 
     def on_loaded() -> None:
         _bind_drag_drop(window)
+
+        def _warmup() -> None:
+            status = api.load_model()
+            if window is None:
+                return
+            payload = json.dumps(status, ensure_ascii=False)
+            window.evaluate_js(
+                f"window.onEngineReady && window.onEngineReady({payload})"
+            )
+
+        threading.Thread(target=_warmup, daemon=True).start()
 
     if events is not None and hasattr(events, "loaded"):
         events.loaded += on_loaded
