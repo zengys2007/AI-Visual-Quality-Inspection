@@ -43,26 +43,26 @@ if __name__ == "__main__":
 
     model = YOLO(str(WEIGHTS))
 
-    # 有 GPU 时自动使用，否则使用 CPU
+    # 有 GPU 时自动使用，否则 CPU；plots=True 时写出 PR/F1 与 batch 可视化
     metrics = model.val(
         data=str(DATA_YAML),
         imgsz=IMGSZ,
         batch=BATCH,
-        split=SPLIT,
+        split=SPLIT,  # 使用 data.yaml 中的 val 划分
         plots=PLOTS,
         project=str(PROJECT),
         name=NAME,
         exist_ok=EXIST_OK,
     )
 
-    # Box 指标（外接框）
+    # Box：轴对齐外接框（与竞赛 CSV 评分更直接相关）
     print("── Box ──")
     print(f"mAP50-95: {metrics.box.map:.4f}")
     print(f"mAP50:    {metrics.box.map50:.4f}")
     print(f"mAP75:    {metrics.box.map75:.4f}")
     print(f"maps:     {metrics.box.maps}")
 
-    # Mask 指标（实例分割）
+    # Mask：实例分割像素级重合（细裂纹上通常低于 Box）
     print("── Mask ──")
     print(f"mAP50-95: {metrics.seg.map:.4f}")
     print(f"mAP50:    {metrics.seg.map50:.4f}")

@@ -113,6 +113,7 @@ if __name__ == "__main__":
     if not SOURCE.exists():
         raise FileNotFoundError(f"找不到输入: {SOURCE}")
 
+    # 输出：CSV（评分）+ images（叠加图）+ txt（归一化多边形，仅内部）
     out_dir = PROJECT / NAME
     img_dir = out_dir / IMG_DIR
     txt_dir = out_dir / TXT_DIR
@@ -121,10 +122,10 @@ if __name__ == "__main__":
 
     model = YOLO(str(WEIGHTS))
 
-    # 叠加图保存到 out_dir/images/
+    # Ultralytics 将可视化图写到 out_dir/images/；stream 逐张产出省内存
     results = model.predict(
         source=str(SOURCE),
-        conf=CONF,
+        conf=CONF,  # 默认取自验证集 F1 最优点附近
         imgsz=IMGSZ,
         save=SAVE,
         stream=STREAM,
@@ -140,7 +141,7 @@ if __name__ == "__main__":
         txt_path = txt_dir / f"{stem}.txt"
 
         _write_yolo_txt(txt_path, result)
-        rows = _csv_rows_for_image(result)
+        rows = _csv_rows_for_image(result)  # 无裂纹 → 一行 Ok
         csv_rows.extend(rows)
 
         print(f"\n{image_id}")
@@ -154,6 +155,7 @@ if __name__ == "__main__":
                 )
         print(f"  -> {txt_path}")
 
+    # 八列 CSV，字段与 docs/接口规范.md / 附件1 对齐
     csv_path = out_dir / CSV_NAME
     with csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)

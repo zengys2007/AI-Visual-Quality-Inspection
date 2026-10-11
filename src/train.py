@@ -34,14 +34,15 @@ if __name__ == "__main__":
 
     os.chdir(ROOT)
 
+    # 从 *-seg 预训练权重微调实例分割（单类 Surface_Crack）
     model = YOLO(PRETRAINED)
 
-    # 有 GPU 时自动使用 device=0，否则使用 CPU
+    # 有 GPU 时自动使用 device=0，否则使用 CPU；权重写入 PROJECT/NAME/weights/
     results = model.train(
         data=str(DATA_YAML),
         epochs=EPOCHS,
         imgsz=IMGSZ,
         project=str(PROJECT),
         name=NAME,
-        exist_ok=EXIST_OK,
+        exist_ok=EXIST_OK,  # True：同名 run 覆盖，便于反复调参
     )

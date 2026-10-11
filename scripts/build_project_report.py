@@ -13,6 +13,7 @@ from docx.shared import Cm, Pt, RGBColor
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "docs" / "电池包瑕疵检测_项目方案报告.docx"
 
+# 报告排版配色（封面标题 / 正文 / 次要说明）
 NAVY = RGBColor(0x1A, 0x36, 0x5D)
 ACCENT = RGBColor(0x16, 0x77, 0xFF)
 INK = RGBColor(0x1A, 0x23, 0x32)
@@ -20,6 +21,7 @@ MUTED = RGBColor(0x5C, 0x6B, 0x7A)
 
 
 def set_run_font(run, name="宋体", size=12, bold=False, color=INK, east="宋体"):
+    """同时设置 ascii / hAnsi / eastAsia，保证中西文一致。"""
     run.bold = bold
     run.font.size = Pt(size)
     run.font.color.rgb = color
@@ -33,6 +35,7 @@ def set_run_font(run, name="宋体", size=12, bold=False, color=INK, east="宋�
 
 
 def add_heading(doc, text, level=1):
+    """一级/二级标题：黑体 + 章节色。"""
     p = doc.add_paragraph()
     p.paragraph_format.space_before = Pt(16 if level == 1 else 12)
     p.paragraph_format.space_after = Pt(8)
@@ -44,6 +47,7 @@ def add_heading(doc, text, level=1):
 
 
 def add_body(doc, text, first_line=True):
+    """正文段落：1.5 倍行距，默认首行缩进约两字符。"""
     p = doc.add_paragraph()
     pf = p.paragraph_format
     pf.space_before = Pt(2)
@@ -57,6 +61,7 @@ def add_body(doc, text, first_line=True):
 
 
 def add_caption(doc, text):
+    """表题 / 图注：居中楷体。"""
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_before = Pt(4)
@@ -67,6 +72,7 @@ def add_caption(doc, text):
 
 
 def shade_header_row(row, fill="1A365D"):
+    """表头单元格底色（OOXML w:shd）。"""
     for cell in row.cells:
         tc = cell._tc
         tcPr = tc.get_or_add_tcPr()
@@ -82,6 +88,7 @@ def shade_header_row(row, fill="1A365D"):
 
 
 def add_table(doc, headers, rows, col_widths=None):
+    """居中网格表：白字表头 + 宋体单元格；col_widths 单位为厘米。"""
     table = doc.add_table(rows=1 + len(rows), cols=len(headers))
     table.style = "Table Grid"
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -111,6 +118,7 @@ def add_table(doc, headers, rows, col_widths=None):
 
 
 def set_cell_text(cell, text, size=12, bold=False, align=WD_ALIGN_PARAGRAPH.CENTER, east="宋体"):
+    """清空单元格后写入单段文字。"""
     cell.text = ""
     p = cell.paragraphs[0]
     p.alignment = align
@@ -119,7 +127,9 @@ def set_cell_text(cell, text, size=12, bold=False, align=WD_ALIGN_PARAGRAPH.CENT
 
 
 def build():
+    """按竞赛方案结构生成完整 Word 报告并写入 docs/。"""
     doc = Document()
+    # A4 + 常规页边距
     for section in doc.sections:
         section.top_margin = Cm(2.54)
         section.bottom_margin = Cm(2.54)
@@ -133,7 +143,7 @@ def build():
     style.font.size = Pt(12)
     style.element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
 
-    # Cover
+    # ── 封面 ──────────────────────────────────────────
     for _ in range(3):
         doc.add_paragraph()
     p = doc.add_paragraph()
@@ -163,6 +173,7 @@ def build():
     run = p.add_run("（表面裂纹 Surface_Crack 视觉质检系统）")
     set_run_font(run, "楷体", 14, False, MUTED, "楷体")
 
+    # 封面元信息表（队名等可按报名信息修改）
     meta = [
         ("作品名称", "电池包表面裂纹视觉质检系统（AI-Visual-Quality-Inspection）"),
         ("所选赛题", "赛题二：电池包瑕疵检测"),
@@ -188,7 +199,7 @@ def build():
 
     doc.add_page_break()
 
-    # TOC-like outline
+    # ── 目录（静态大纲，非 Word 域）────────────────────
     add_heading(doc, "目录", 1)
     toc = [
         "一、研究现状与意义",
@@ -208,6 +219,7 @@ def build():
 
     doc.add_page_break()
 
+    # ── 正文各章（内容与赛题说明书 / 仓库实现对齐）────
     add_heading(doc, "一、研究现状与意义", 1)
     add_heading(doc, "1.1 竞赛与产业背景", 2)
     add_body(
@@ -562,6 +574,7 @@ def build():
         "后续工作建议：持续扩充多边形标注并重训；在 val 上系统扫描置信度—F1 曲线以确定提交阈值；将桌面应用由 Mock 检测切换为调用同一套 YOLO 权重，实现“所见即所交”；补充误检/漏检案例集，针对涂覆纹理与细裂纹做增强。所有改进仍须遵守“不碰测试集标签、不人工改写结果”的竞赛纪律。",
     )
 
+    # ── 参考文献 ──────────────────────────────────────
     add_heading(doc, "参考文献与资料", 1)
     refs = [
         "[1] 绍兴市第一届大学生人工智能应用竞赛赛题：智能制造与工业智能 AI 应用赛道（赛题说明书）。",
@@ -580,7 +593,7 @@ def build():
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     doc.save(OUT)
-    print(OUT)
+    print(OUT)  # 输出生成路径，便于确认
 
 
 if __name__ == "__main__":

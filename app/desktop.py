@@ -60,6 +60,7 @@ def _system_prefers_dark() -> bool:
 
 
 def _resolve_window_bg() -> tuple[str, int, tuple[int, int, int]]:
+    """按系统主题返回 (hex, COLORREF, RGB)，供窗口与 DWM 着色一致。"""
     if _system_prefers_dark():
         return BG_NIGHT_HEX, BG_NIGHT_COLORREF, BG_NIGHT_RGB
     return BG_DAY_HEX, BG_DAY_COLORREF, BG_DAY_RGB
@@ -70,13 +71,14 @@ class Api:
 
     def __init__(self) -> None:
         self._window: webview.Window | None = None
-        self._model = None
+        self._model = None  # Ultralytics YOLO 实例，选权重后加载
         self._weights_path: Path | None = None
-        self._conf = float(CONF)
-        self._model_lock = threading.Lock()
+        self._conf = float(CONF)  # 当前置信度阈值，可被推荐/手动覆盖
+        self._model_lock = threading.Lock()  # 加载与推理互斥，避免并发换模
         self._load_error: str | None = None
 
     def bind(self, window: webview.Window) -> None:
+        """挂接主窗口，供文件对话框与拖放使用。"""
         self._window = window
 
     def get_engine_status(self) -> dict:
@@ -116,6 +118,7 @@ class Api:
             import numpy as np
             from ultralytics.utils.metrics import smooth
 
+            # 在 val 划分上评估（不落盘 plots），读取 Box F1–置信度曲线
             os.chdir(PROJECT_ROOT)
             data_yaml = PROJECT_ROOT / "configs" / "data.yaml"
             metrics = self._model.val(
@@ -127,8 +130,9 @@ class Api:
                 verbose=False,
             )
             box = metrics.box
-            px = np.asarray(box.px, dtype=float)
+            px = np.asarray(box.px, dtype=float)  # 置信度横轴
             f1_curve = np.asarray(box.f1_curve, dtype=float)
+            # 多类时对类别维取均值；本项目仅 Surface_Crack
             if f1_curve.ndim == 1:
                 mean_f1 = f1_curve
             else:
@@ -136,6 +140,7 @@ class Api:
             if px.size == 0 or mean_f1.size == 0:
                 return {"ok": False, "error": "验证结果中无 F1 曲线"}
 
+            # 平滑后取峰值对应置信度，写回 self._conf
             idx = int(smooth(mean_f1, 0.1).argmax())
             idx = max(0, min(idx, len(px) - 1))
             conf = round(float(px[idx]), 3)
@@ -201,11 +206,16 @@ class Api:
             return {"ok": False, "error": str(exc)}
 
     def detect_image(self, payload: dict | None = None) -> dict:
-        """对单张图做 YOLO 推理，返回与接口规范一致的 records。"""
+        """对单张图做 YOLO 推理，返回与接口规范一致的 records。
+
+        payload 支持 path（本地绝对路径）或 dataUrl（base64）；
+        可选 conf 覆盖当前阈值。无检出时 records 含一行 Ok 占位。
+        """
         data = payload if isinstance(payload, dict) else {}
         name = str(data.get("name") or "image.jpg")
         path_raw = data.get("path")
         data_url = data.get("dataUrl")
+        # 优先用请求内 conf，否则用 Api 当前阈值
         conf = self._conf
         if data.get("conf") is not None:
             try:
@@ -225,6 +235,7 @@ class Api:
             )
             result = results[0]
             records = self._records_for_image(result, name)
+            # 首行 Ok 视为合格，否则 NG（有裂纹实例）
             verdict = "ok" if records and records[0]["class_name"] == "Ok" else "ng"
             inference_ms = records[0]["inference_time_ms"] if records else 0.0
             return {
@@ -259,6 +270,7 @@ class Api:
         return {"ok": True, "path": str(path)}
 
     def _ensure_model(self):
+        """返回已加载模型；未选权重时抛错提示前端引导选择。"""
         with self._model_lock:
             if self._model is not None:
                 return self._model
@@ -266,6 +278,7 @@ class Api:
 
     @staticmethod
     def _resolve_source(path_raw, data_url):
+        """优先本地路径；否则解码 dataUrl 为 PIL RGB 图供 YOLO 推理。"""
         if path_raw:
             path = Path(str(path_raw))
             if path.is_file():
@@ -273,6 +286,7 @@ class Api:
         if not data_url:
             raise ValueError("缺少图像数据（path 或 dataUrl）")
         text = str(data_url)
+        # data:image/...;base64,XXXX → 只取逗号后载荷
         if "," in text:
             text = text.split(",", 1)[1]
         try:
@@ -285,6 +299,7 @@ class Api:
 
     @staticmethod
     def _inference_time_ms(result) -> float:
+        """整张图耗时 = 预处理 + 推理 + 后处理（毫秒）。"""
         speed = result.speed or {}
         return float(
             speed.get("preprocess", 0)
@@ -308,9 +323,11 @@ class Api:
 
     @classmethod
     def _records_for_image(cls, result, image_id: str) -> list[dict]:
+        """将 YOLO 结果转为接口规范行：有框多行；无框一行 Ok（坐标填 -1）。"""
         t_ms = round(cls._inference_time_ms(result), 1)
         boxes = result.boxes
         if boxes is None or len(boxes) == 0:
+            # 无缺陷占位行，保证测试图可被评分工具完整统计
             return [
                 {
                     "image_id": image_id,
@@ -340,11 +357,12 @@ class Api:
                     "y_min": round(y_min, 1),
                     "x_max": round(x_max, 1),
                     "y_max": round(y_max, 1),
-                    "inference_time_ms": t_ms,
+                    "inference_time_ms": t_ms,  # 同图多行共用整图耗时
                     "polygon": cls._polygon_for_index(result, idx),
                 }
             )
         return rows
+
 
 def _ensure_blank_icon() -> Path:
     """生成全透明 .ico，用于替换默认 Python / 系统窗口图标。"""
@@ -475,6 +493,7 @@ def _collect_image_paths(raw_paths: list[str]) -> list[Path]:
 
 
 def _path_to_payload(path: Path) -> dict[str, object]:
+    """把本地图像编码为前端 importDroppedImages 所需结构。"""
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     data = base64.b64encode(path.read_bytes()).decode("ascii")
     st = path.stat()
@@ -488,6 +507,7 @@ def _path_to_payload(path: Path) -> dict[str, object]:
 
 
 def _push_images_to_frontend(window, paths: list[Path]) -> None:
+    """通过 evaluate_js 将拖入图像列表交给前端；失败则写状态栏。"""
     if not paths:
         window.evaluate_js(
             "window.setStatusMessage && window.setStatusMessage('未找到可导入的图像文件')"
@@ -505,6 +525,7 @@ def _push_images_to_frontend(window, paths: list[Path]) -> None:
     )
 
 
+# 前端拖放视觉反馈：用 depth 抵消子元素 enter/leave 抖动，挂 is-dragging 样式
 _DRAG_FEEDBACK_JS = r"""
 (function () {
   if (window.__qiDragFeedback) return;
@@ -540,6 +561,7 @@ def _bind_drag_drop(window) -> None:
         return None
 
     def on_drop(event) -> None:
+        # pywebview 在 files[].pywebviewFullPath 提供本地绝对路径
         files = (event or {}).get("dataTransfer", {}).get("files", []) or []
         paths = [
             f["pywebviewFullPath"]
@@ -558,6 +580,7 @@ def _bind_drag_drop(window) -> None:
 
 
 def main() -> None:
+    """创建 pywebview 窗口、挂接 JS API / 拖放 / 窗口样式后进入事件循环。"""
     if not INDEX.is_file():
         raise FileNotFoundError(f"找不到界面文件: {INDEX}")
 
@@ -575,6 +598,7 @@ def main() -> None:
     )
     api.bind(window)
 
+    # 兼容不同 pywebview 版本的事件挂载点
     events = getattr(window, "events", None)
     if events is not None and hasattr(events, "before_show"):
         events.before_show += _style_window_chrome
@@ -583,6 +607,7 @@ def main() -> None:
 
     def on_loaded() -> None:
         _bind_drag_drop(window)
+        # 启动时尚未选权重，通知前端显示引导状态
         window.evaluate_js(
             "window.onEngineReady && window.onEngineReady("
             '{"ok": false, "need_weights": true}'
