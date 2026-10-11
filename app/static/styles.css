@@ -491,6 +491,7 @@ label {
 .toolbar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 16px;
   padding: 14px 16px;
   background: var(--panel);
@@ -504,6 +505,69 @@ label {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.conf-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.conf-current,
+.conf-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.conf-current strong {
+  min-width: 3.6em;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.conf-edit input {
+  width: 88px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.conf-edit input:focus {
+  outline: none;
+  border-color: rgba(22, 119, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.12);
+  background: var(--panel-muted);
+}
+
+html.theme-night .conf-current strong,
+html.theme-night .conf-edit input,
+body.theme-night .conf-current strong,
+body.theme-night .conf-edit input {
+  background: var(--panel-muted);
+  color: var(--ink);
+  border-color: var(--line);
 }
 
 .btn {

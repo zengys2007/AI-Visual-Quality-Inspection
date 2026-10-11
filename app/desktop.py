@@ -72,6 +72,7 @@ class Api:
         self._window: webview.Window | None = None
         self._model = None
         self._weights_path: Path | None = None
+        self._conf = float(CONF)
         self._model_lock = threading.Lock()
         self._load_error: str | None = None
 
@@ -86,12 +87,23 @@ class Api:
             "weights": str(weights) if weights else "",
             "weights_name": weights.name if weights else "",
             "weights_ok": bool(weights and weights.is_file()),
-            "conf": CONF,
+            "conf": self._conf,
             "imgsz": IMGSZ,
             "model_loaded": self._model is not None,
             "load_error": self._load_error,
             "need_weights": self._model is None,
         }
+
+    def set_conf(self, value) -> dict:
+        """更新检测置信度阈值（0~1）。"""
+        try:
+            conf = float(value)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "置信度必须是数字", "conf": self._conf}
+        if not 0.0 <= conf <= 1.0:
+            return {"ok": False, "error": "置信度需在 0 ~ 1 之间", "conf": self._conf}
+        self._conf = round(conf, 3)
+        return {"ok": True, "conf": self._conf}
 
     def choose_weights(self) -> dict:
         """弹出文件管理器选择 .pt 权重并加载。"""
@@ -133,7 +145,7 @@ class Api:
                 "ok": True,
                 "weights": str(path),
                 "name": path.name,
-                "conf": CONF,
+                "conf": self._conf,
                 "imgsz": IMGSZ,
             }
         except Exception as exc:  # noqa: BLE001 — 透传给前端
@@ -148,13 +160,20 @@ class Api:
         name = str(data.get("name") or "image.jpg")
         path_raw = data.get("path")
         data_url = data.get("dataUrl")
+        conf = self._conf
+        if data.get("conf") is not None:
+            try:
+                conf = float(data.get("conf"))
+            except (TypeError, ValueError):
+                conf = self._conf
+            conf = min(1.0, max(0.0, conf))
 
         try:
             model = self._ensure_model()
             source = self._resolve_source(path_raw, data_url)
             results = model.predict(
                 source=source,
-                conf=CONF,
+                conf=conf,
                 imgsz=IMGSZ,
                 verbose=False,
             )

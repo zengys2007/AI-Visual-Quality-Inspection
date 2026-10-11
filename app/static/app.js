@@ -23,6 +23,7 @@
   let engineReady = false;
   let weightsLabel = "";
   let choosingWeights = false;
+  let detectConf = 0.223;
 
   const els = {
     fileInput: document.getElementById("fileInput"),
@@ -74,6 +75,8 @@
     alertOk: document.getElementById("alertOk"),
     alertTitle: document.getElementById("alertTitle"),
     alertMessage: document.getElementById("alertMessage"),
+    confCurrent: document.getElementById("confCurrent"),
+    confInput: document.getElementById("confInput"),
     statTotal: document.getElementById("statTotal"),
     statNg: document.getElementById("statNg"),
     statOk: document.getElementById("statOk"),
@@ -217,12 +220,47 @@
     return window.pywebview && window.pywebview.api ? window.pywebview.api : null;
   }
 
+  function formatConf(value) {
+    return Number(value).toFixed(3);
+  }
+
+  function refreshConfDisplay() {
+    if (els.confCurrent) els.confCurrent.textContent = formatConf(detectConf);
+    if (els.confInput && document.activeElement !== els.confInput) {
+      els.confInput.value = formatConf(detectConf);
+    }
+  }
+
+  function applyConfInput({ silent = false } = {}) {
+    const raw = els.confInput ? els.confInput.value : String(detectConf);
+    const v = Number(raw);
+    if (!Number.isFinite(v) || v < 0 || v > 1) {
+      if (!silent) {
+        showAlert("置信度无效", "请输入 0 ~ 1 之间的数字（例如 0.223）。");
+        setStatus("置信度无效，已恢复为当前值");
+      }
+      refreshConfDisplay();
+      return false;
+    }
+    detectConf = Math.round(v * 1000) / 1000;
+    refreshConfDisplay();
+    const api = pyApi();
+    if (api && typeof api.set_conf === "function") {
+      api.set_conf(detectConf).catch(() => {});
+    }
+    if (!silent) {
+      setStatus(`置信度已更新为 ${formatConf(detectConf)}`);
+    }
+    return true;
+  }
+
   async function yoloDetect(image) {
     const api = pyApi();
     if (!api || typeof api.detect_image !== "function") {
       throw new Error("请通过 app/desktop.py 启动桌面应用以使用 YOLO 检测");
     }
-    const payload = { name: image.name };
+    applyConfInput({ silent: true });
+    const payload = { name: image.name, conf: detectConf };
     if (image.path) {
       payload.path = image.path;
     } else {
@@ -244,8 +282,12 @@
         weightsLabel = parts[parts.length - 1] || weightsLabel;
       }
       setConnStatus(weightsStatusText(), "ready");
+      if (status.conf != null && Number.isFinite(Number(status.conf))) {
+        detectConf = Math.round(Number(status.conf) * 1000) / 1000;
+        refreshConfDisplay();
+      }
       setStatus(
-        `模型已加载 · ${weightsLabel} · conf=${status.conf ?? 0.223} · imgsz=${
+        `模型已加载 · ${weightsLabel} · conf=${formatConf(detectConf)} · imgsz=${
           status.imgsz ?? 640
         }`
       );
@@ -1143,6 +1185,7 @@
     els.exportBtn.disabled = !canExport || busy;
     els.fileInput.disabled = busy;
     els.folderInput.disabled = busy;
+    if (els.confInput) els.confInput.disabled = busy;
     if (els.connStatus) els.connStatus.disabled = choosingWeights || busy;
   }
 
@@ -1231,6 +1274,16 @@
       chooseWeightsFile();
     });
   }
+  if (els.confInput) {
+    els.confInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyConfInput();
+        els.confInput.blur();
+      }
+    });
+    els.confInput.addEventListener("blur", () => applyConfInput({ silent: true }));
+  }
   if (els.alertOk) els.alertOk.addEventListener("click", closeAlert);
   if (els.alertClose) els.alertClose.addEventListener("click", closeAlert);
   if (els.alertBackdrop) els.alertBackdrop.addEventListener("click", closeAlert);
@@ -1296,6 +1349,7 @@
 
   renderAll();
   applyTheme(resolveInitialTheme());
+  refreshConfDisplay();
   setConnStatus("选择权重文件", "pick");
   setStatus("请先点击右上角选择 .pt 权重文件");
 
