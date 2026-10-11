@@ -30,12 +30,39 @@ WEIGHTS = PROJECT_ROOT / "best.pt"
 CONF = 0.223
 IMGSZ = 640
 
-# 与前端 --bg / background_color 一致
-BG_HEX = "#EEF1F5"
+# 与前端 --bg / background_color 一致（按系统浅/深色解析）
+BG_DAY_HEX = "#EEF1F5"
+BG_NIGHT_HEX = "#1E1E24"
 # COLORREF: 0x00BBGGRR
-BG_COLORREF = 0x00F5F1EE
+BG_DAY_COLORREF = 0x00F5F1EE
+BG_NIGHT_COLORREF = 0x00241E1E
+BG_DAY_RGB = (0xEE, 0xF1, 0xF5)
+BG_NIGHT_RGB = (0x1E, 0x1E, 0x24)
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+
+def _system_prefers_dark() -> bool:
+    """读取 Windows 应用浅色主题开关；非 Windows 或读取失败则浅色。"""
+    if sys.platform != "win32":
+        return False
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        ) as key:
+            value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            return int(value) == 0
+    except OSError:
+        return False
+
+
+def _resolve_window_bg() -> tuple[str, int, tuple[int, int, int]]:
+    if _system_prefers_dark():
+        return BG_NIGHT_HEX, BG_NIGHT_COLORREF, BG_NIGHT_RGB
+    return BG_DAY_HEX, BG_DAY_COLORREF, BG_DAY_RGB
 
 
 class Api:
@@ -281,10 +308,12 @@ def _style_window_chrome(window) -> None:
         swp_nomove | swp_nosize | swp_nozorder | swp_framechanged,
     )
 
+    _, bg_colorref, bg_rgb = _resolve_window_bg()
+
     # DWMWA_BORDER_COLOR=34, DWMWA_CAPTION_COLOR=35（需 Windows 11）
     try:
         dwmapi = ctypes.windll.dwmapi
-        color = ctypes.c_uint32(BG_COLORREF)
+        color = ctypes.c_uint32(bg_colorref)
         for attr in (34, 35):
             dwmapi.DwmSetWindowAttribute(
                 hwnd,
@@ -301,7 +330,7 @@ def _style_window_chrome(window) -> None:
         if hasattr(native, "BackColor"):
             from System.Drawing import Color  # type: ignore
 
-            r, g, b = 0xEE, 0xF1, 0xF5
+            r, g, b = bg_rgb
             native.BackColor = Color.FromArgb(r, g, b)
     except Exception:
         pass
@@ -420,13 +449,14 @@ def main() -> None:
 
     icon = _ensure_blank_icon()
     api = Api()
+    bg_hex, _, _ = _resolve_window_bg()
     window = webview.create_window(
         title="",
         url=INDEX.as_uri(),
         width=1440,
         height=900,
         min_size=(1100, 700),
-        background_color=BG_HEX,
+        background_color=bg_hex,
         js_api=api,
     )
     api.bind(window)

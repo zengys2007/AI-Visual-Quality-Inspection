@@ -10,7 +10,8 @@
   const EXPORT_PREFIX = "电池包裂纹";
   const LS_LINE = "qi_export_line";
   const LS_SHIFT = "qi_export_shift";
-  const LS_THEME = "qi_theme";
+  /** 仅在用户点击日/夜切换时写入；缺省则跟随系统 */
+  const LS_THEME = "qi_theme_user";
   const WHEEL_ITEM_H = 36;
 
   /** @type {{ id: string, name: string, url: string, path?: string, width: number, height: number, records: object[] | null, verdict: 'pending'|'ok'|'ng', inferenceMs: number | null }[]} */
@@ -666,10 +667,37 @@
     }, 40);
   }
 
-  function applyTheme(theme) {
+  function systemTheme() {
+    try {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "night"
+        : "day";
+    } catch {
+      return "day";
+    }
+  }
+
+  function readStoredTheme() {
+    try {
+      const saved = localStorage.getItem(LS_THEME);
+      if (saved === "day" || saved === "night") return saved;
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  function resolveInitialTheme() {
+    return readStoredTheme() || systemTheme();
+  }
+
+  function applyTheme(theme, { persist = false } = {}) {
     const mode = theme === "night" ? "night" : "day";
+    const themeClass = `theme-${mode}`;
+    document.documentElement.classList.remove("theme-day", "theme-night");
+    document.documentElement.classList.add(themeClass);
     document.body.classList.remove("theme-day", "theme-night");
-    document.body.classList.add(`theme-${mode}`);
+    document.body.classList.add(themeClass);
     if (els.themeDayBtn) {
       els.themeDayBtn.classList.toggle("is-active", mode === "day");
       els.themeDayBtn.setAttribute("aria-pressed", mode === "day" ? "true" : "false");
@@ -678,10 +706,12 @@
       els.themeNightBtn.classList.toggle("is-active", mode === "night");
       els.themeNightBtn.setAttribute("aria-pressed", mode === "night" ? "true" : "false");
     }
-    try {
-      localStorage.setItem(LS_THEME, mode);
-    } catch {
-      /* ignore */
+    if (persist) {
+      try {
+        localStorage.setItem(LS_THEME, mode);
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -1042,10 +1072,27 @@
     });
   }
   if (els.themeDayBtn) {
-    els.themeDayBtn.addEventListener("click", () => applyTheme("day"));
+    els.themeDayBtn.addEventListener("click", () =>
+      applyTheme("day", { persist: true })
+    );
   }
   if (els.themeNightBtn) {
-    els.themeNightBtn.addEventListener("click", () => applyTheme("night"));
+    els.themeNightBtn.addEventListener("click", () =>
+      applyTheme("night", { persist: true })
+    );
+  }
+  try {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onSystemTheme = () => {
+      if (!readStoredTheme()) applyTheme(systemTheme());
+    };
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", onSystemTheme);
+    } else if (typeof mq.addListener === "function") {
+      mq.addListener(onSystemTheme);
+    }
+  } catch {
+    /* ignore */
   }
   if (els.exportCancel) {
     els.exportCancel.addEventListener("click", () => {
@@ -1091,11 +1138,7 @@
   });
 
   renderAll();
-  try {
-    applyTheme(localStorage.getItem(LS_THEME) || "day");
-  } catch {
-    applyTheme("day");
-  }
+  applyTheme(resolveInitialTheme());
   setStatus("就绪 · 等待加载 YOLO 模型");
 
   // 桌面端会在模型预热后回调 onEngineReady；浏览器直开则提示需走 desktop.py

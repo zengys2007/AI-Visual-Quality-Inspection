@@ -4,20 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>电池包视觉质检系统</title>
+    <script>
+      (function () {
+        var mode = "day";
+        try {
+          var saved = localStorage.getItem("qi_theme_user");
+          if (saved === "day" || saved === "night") mode = saved;
+          else if (window.matchMedia("(prefers-color-scheme: dark)").matches)
+            mode = "night";
+        } catch (e) {}
+        document.documentElement.classList.add("theme-" + mode);
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=theme-system-1" />
   </head>
-  <body class="theme-day">
+  <body>
     <div class="app">
       <header class="titlebar">
         <div class="titlebar-left">
           <div class="theme-switch" role="group" aria-label="背景色：白天 / 夜晚">
-            <button type="button" class="theme-btn is-active" id="themeDayBtn" title="白天工作" aria-label="白天工作" aria-pressed="true">
+            <button type="button" class="theme-btn" id="themeDayBtn" title="白天工作" aria-label="白天工作" aria-pressed="false">
               <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
                 <circle cx="12" cy="12" r="4" fill="currentColor" />
                 <path

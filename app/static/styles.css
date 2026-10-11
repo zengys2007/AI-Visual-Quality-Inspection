@@ -1,4 +1,12 @@
-:root,
+:root {
+  --radius: 8px;
+  --radius-sm: 6px;
+  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* 默认 / 白天：色板挂在 html + body，避免 :root 长期锁住白天色 */
+html.theme-day,
 body.theme-day {
   --bg: #eef1f5;
   --panel: #ffffff;
@@ -7,56 +15,265 @@ body.theme-day {
   --muted: #5c6b7a;
   --line: #d9e0e8;
   --line-soft: rgba(26, 35, 50, 0.06);
+  --panel-border: transparent;
+  --table-head-bg: #eef2f6;
+  --table-head-fg: #5c6b7a;
   --primary: #1677ff;
   --primary-hover: #4096ff;
   --primary-active: #0958d9;
   --primary-soft: #e6f4ff;
+  --primary-glow: rgba(22, 119, 255, 0.45);
   --ok: #52c41a;
   --ok-soft: #f6ffed;
+  --ok-glow: rgba(82, 196, 26, 0.35);
   --danger: #ff4d4f;
   --danger-soft: #fff2f0;
+  --danger-glow: rgba(255, 77, 79, 0.35);
   --warning: #faad14;
   --warning-soft: #fffbe6;
   --crack: #ff4d4f;
   --checker-a: #e2e8ef;
   --shadow: 0 1px 2px rgba(26, 35, 50, 0.04), 0 8px 24px rgba(26, 35, 50, 0.06);
   --shadow-sm: 0 1px 2px rgba(26, 35, 50, 0.04), 0 4px 12px rgba(26, 35, 50, 0.05);
-  --radius: 8px;
-  --radius-sm: 6px;
-  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, monospace;
   --theme-sun: #d48806;
   --theme-moon: #5c6b7a;
+  color-scheme: light;
 }
 
+html.theme-night,
 body.theme-night {
-  --bg: #141a24;
-  --panel: #1e2633;
-  --panel-muted: #252e3d;
-  --ink: #e8eef7;
-  --muted: #9aa8b8;
-  --line: #334155;
-  --line-soft: rgba(232, 238, 247, 0.08);
-  --primary: #3b82f6;
-  --primary-hover: #60a5fa;
-  --primary-active: #93c5fd;
-  --primary-soft: rgba(59, 130, 246, 0.16);
-  --ok: #73d13d;
-  --ok-soft: rgba(115, 209, 61, 0.14);
-  --danger: #ff7875;
-  --danger-soft: rgba(255, 120, 117, 0.14);
+  --bg: #1e1e24;
+  --panel: #25252b;
+  --panel-muted: #2c2c33;
+  --ink: #f5f5f5;
+  --muted: #a0a0a0;
+  --line: rgba(255, 255, 255, 0.12);
+  --line-soft: rgba(255, 255, 255, 0.08);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --table-head-bg: #2a2a32;
+  --table-head-fg: #f0f0f0;
+  --primary: #0a84ff;
+  --primary-hover: #409cff;
+  --primary-active: #0070e0;
+  --primary-soft: rgba(10, 132, 255, 0.2);
+  --primary-glow: rgba(10, 132, 255, 0.45);
+  --ok: #52c41a;
+  --ok-soft: rgba(82, 196, 26, 0.18);
+  --ok-glow: rgba(82, 196, 26, 0.55);
+  --danger: #ff4d4f;
+  --danger-soft: rgba(255, 77, 79, 0.18);
+  --danger-glow: rgba(255, 77, 79, 0.5);
   --warning: #ffc53d;
   --warning-soft: rgba(255, 197, 61, 0.14);
-  --crack: #ff7875;
-  --checker-a: #2a3444;
+  --crack: #ff4d4f;
+  --checker-a: #2a2a32;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.28), 0 10px 28px rgba(0, 0, 0, 0.32);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22), 0 4px 14px rgba(0, 0, 0, 0.24);
   --theme-sun: #9aa8b8;
   --theme-moon: #93c5fd;
+  color-scheme: dark;
+}
+
+/* 暗色文本 / 表头：硬编码兜底，避免变量未生效时仍显示白天色 */
+html.theme-night .brand-text h1,
+body.theme-night .brand-text h1,
+html.theme-night .panel-head h2,
+body.theme-night .panel-head h2,
+html.theme-night .file-name,
+body.theme-night .file-name {
+  color: #f5f5f5;
+}
+
+/* 结果区统计数字：总数纯白，NG/OK 用高亮状态色 */
+html.theme-night .stat em,
+body.theme-night .stat em,
+html.theme-night .stat:nth-child(1) em,
+body.theme-night .stat:nth-child(1) em {
+  color: #ffffff;
+  text-shadow: none;
+}
+
+html.theme-night .brand-text p,
+body.theme-night .brand-text p,
+html.theme-night .meta-text,
+body.theme-night .meta-text,
+html.theme-night .viewer-placeholder,
+body.theme-night .viewer-placeholder,
+html.theme-night .stat span,
+body.theme-night .stat span,
+html.theme-night .empty-row td,
+body.theme-night .empty-row td {
+  color: #a0a0a0;
+}
+
+/* 系统日志类文案：双主题统一弱化，不与主功能抢视线 */
+html.theme-night .hint,
+body.theme-night .hint,
+html.theme-night .statusbar,
+body.theme-night .statusbar {
+  color: #7a7a7a;
+}
+
+html.theme-night .viewer-placeholder strong,
+body.theme-night .viewer-placeholder strong {
+  color: #f5f5f5;
+}
+
+/* 左侧空状态：提亮并加粗引导文案 */
+html.theme-night .empty-state,
+body.theme-night .empty-state {
+  color: #e0e0e0;
+}
+
+html.theme-night .empty-state strong,
+body.theme-night .empty-state strong {
+  color: #e0e0e0;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+html.theme-night .empty-state span,
+body.theme-night .empty-state span {
+  color: #e0e0e0;
+  font-size: 13px;
+}
+
+html.theme-night th,
+body.theme-night th {
+  background: #2a2a32;
+  color: #f0f0f0;
+}
+
+/* 暗色语义色硬编码：主按钮蓝 / NG 红 / OK 绿 / YOLO 就绪点 */
+html.theme-night .stat:nth-child(2) em,
+body.theme-night .stat:nth-child(2) em {
+  color: #ff4d4f;
+  text-shadow: 0 0 12px rgba(255, 77, 79, 0.55);
+}
+
+html.theme-night .stat:nth-child(3) em,
+body.theme-night .stat:nth-child(3) em {
+  color: #52c41a;
+  text-shadow: 0 0 10px rgba(82, 196, 26, 0.55);
+}
+
+html.theme-night .tag.ng,
+body.theme-night .tag.ng {
+  color: #ff4d4f;
+  background: rgba(255, 77, 79, 0.18);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 77, 79, 0.4),
+    0 0 12px rgba(255, 77, 79, 0.45);
+}
+
+html.theme-night .tag.ok,
+body.theme-night .tag.ok {
+  color: #52c41a;
+  background: rgba(82, 196, 26, 0.18);
+  box-shadow:
+    inset 0 0 0 1px rgba(82, 196, 26, 0.4),
+    0 0 10px rgba(82, 196, 26, 0.4);
+}
+
+html.theme-night .legend-item.crack i,
+body.theme-night .legend-item.crack i {
+  background: #ff4d4f;
+  box-shadow: 0 0 8px rgba(255, 77, 79, 0.55);
+}
+
+html.theme-night .legend-item.ok i,
+body.theme-night .legend-item.ok i {
+  background: #52c41a;
+  box-shadow: 0 0 8px rgba(82, 196, 26, 0.5);
+}
+
+html.theme-night .seg-btn.seg-primary,
+body.theme-night .seg-btn.seg-primary {
+  background: #0a84ff;
+  color: #ffffff;
+  box-shadow:
+    0 0 0 1px rgba(64, 156, 255, 0.55),
+    0 4px 18px rgba(10, 132, 255, 0.55);
+}
+
+html.theme-night .seg-btn.seg-primary:hover:not(:disabled),
+body.theme-night .seg-btn.seg-primary:hover:not(:disabled) {
+  background: #409cff;
+  box-shadow:
+    0 0 0 1px rgba(64, 156, 255, 0.7),
+    0 6px 22px rgba(10, 132, 255, 0.65);
+}
+
+html.theme-night .seg-btn.seg-primary:active:not(:disabled),
+body.theme-night .seg-btn.seg-primary:active:not(:disabled) {
+  background: #0070e0;
+}
+
+html.theme-night .seg-btn.seg-primary:disabled,
+body.theme-night .seg-btn.seg-primary:disabled {
+  opacity: 1;
+  background: rgba(10, 132, 255, 0.42);
+  color: rgba(255, 255, 255, 0.78);
+  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.35);
+  cursor: not-allowed;
+}
+
+html.theme-night .btn-primary,
+body.theme-night .btn-primary {
+  background: #0a84ff;
+  border-color: #0a84ff;
+  box-shadow: 0 2px 14px rgba(10, 132, 255, 0.5);
+}
+
+html.theme-night .btn-primary:hover:not(:disabled),
+body.theme-night .btn-primary:hover:not(:disabled) {
+  background: #409cff;
+  border-color: #409cff;
+  box-shadow: 0 4px 18px rgba(10, 132, 255, 0.6);
+}
+
+html.theme-night .btn-primary:disabled,
+body.theme-night .btn-primary:disabled {
+  opacity: 1;
+  background: rgba(10, 132, 255, 0.42);
+  border-color: rgba(10, 132, 255, 0.42);
+  color: rgba(255, 255, 255, 0.78);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+html.theme-night .status-pill.ready,
+body.theme-night .status-pill.ready {
+  color: #6ddf2b;
+  background: rgba(82, 196, 26, 0.18);
+}
+
+html.theme-night .status-pill.ready::before,
+body.theme-night .status-pill.ready::before {
+  background: #7dff3d;
+  box-shadow: 0 0 12px rgba(125, 255, 61, 0.75);
+  animation: none;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* 主题切换：全局过渡背景 / 文字 / 边框（组件自带 transition 时需一并列出） */
+@media (prefers-reduced-motion: no-preference) {
+  *,
+  *::before,
+  *::after {
+    transition:
+      background-color 240ms ease,
+      background 240ms ease,
+      color 240ms ease,
+      border-color 240ms ease,
+      outline-color 240ms ease,
+      box-shadow 240ms ease,
+      fill 240ms ease,
+      stroke 240ms ease;
+  }
 }
 
 html,
@@ -103,6 +320,7 @@ label {
 /* —— Cards —— */
 .card {
   background: var(--panel);
+  border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
@@ -113,6 +331,7 @@ label {
   justify-content: space-between;
   padding: 18px 22px;
   background: var(--panel);
+  border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   animation: rise 420ms ease both;
@@ -146,7 +365,12 @@ label {
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease;
+  transition:
+    background-color 240ms ease,
+    background 140ms ease,
+    color 240ms ease,
+    border-color 240ms ease,
+    box-shadow 240ms ease;
 }
 
 .theme-btn:hover {
@@ -196,6 +420,7 @@ label {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.01em;
+  color: var(--ink);
 }
 
 .brand-text p {
@@ -229,7 +454,7 @@ label {
   height: 7px;
   border-radius: 50%;
   background: var(--primary);
-  box-shadow: 0 0 0 0 rgba(22, 119, 255, 0.45);
+  box-shadow: 0 0 0 0 var(--primary-glow);
   animation: pulse 1.8s ease infinite;
 }
 
@@ -245,6 +470,7 @@ label {
   gap: 16px;
   padding: 14px 16px;
   background: var(--panel);
+  border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   animation: rise 480ms ease both;
@@ -270,10 +496,11 @@ label {
   line-height: 1.2;
   transition:
     transform 140ms ease,
+    background-color 240ms ease,
     background 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease,
+    border-color 240ms ease,
+    color 240ms ease,
+    box-shadow 240ms ease,
     opacity 140ms ease;
   user-select: none;
 }
@@ -295,13 +522,13 @@ label {
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.28);
+  box-shadow: 0 2px 10px var(--primary-glow);
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
-  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.32);
+  box-shadow: 0 4px 14px var(--primary-glow);
 }
 
 .btn-primary:active:not(:disabled) {
@@ -327,6 +554,43 @@ label {
   border-color: var(--primary);
 }
 
+/* 暗色次要按钮：亮一点的灰底 + #4A4A4A 边框，明确可点击 */
+html.theme-night .btn-secondary,
+body.theme-night .btn-secondary {
+  background: #36363f;
+  border-color: #4a4a4a;
+  color: #f0f0f0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+html.theme-night .btn-secondary:hover:not(:disabled),
+body.theme-night .btn-secondary:hover:not(:disabled) {
+  background: #40404c;
+  border-color: #6a6a72;
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+html.theme-night .btn-secondary:active:not(:disabled),
+body.theme-night .btn-secondary:active:not(:disabled) {
+  background: #2f2f38;
+  border-color: #0a84ff;
+  color: #409cff;
+  box-shadow: none;
+}
+
+html.theme-night .btn-secondary:disabled,
+body.theme-night .btn-secondary:disabled,
+html.theme-night label.btn-secondary:has(input:disabled),
+body.theme-night label.btn-secondary:has(input:disabled) {
+  opacity: 1;
+  background: #2d2d35;
+  border-color: #3a3a42;
+  color: rgba(240, 240, 240, 0.4);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 /* Segmented control: 单张 / 批量 */
 .segmented {
   display: inline-flex;
@@ -349,9 +613,11 @@ label {
   font-size: 13px;
   cursor: pointer;
   transition:
+    background-color 240ms ease,
     background 140ms ease,
-    color 140ms ease,
-    box-shadow 140ms ease,
+    color 240ms ease,
+    border-color 240ms ease,
+    box-shadow 240ms ease,
     opacity 140ms ease;
 }
 
@@ -360,15 +626,24 @@ label {
   color: var(--ink);
 }
 
+body.theme-night .seg-btn:not(.seg-primary) {
+  color: #c8c8cc;
+}
+
+body.theme-night .seg-btn:hover:not(:disabled):not(.seg-primary) {
+  background: #32323a;
+  color: #f5f5f5;
+}
+
 .seg-btn.seg-primary {
   background: var(--primary);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.28);
+  box-shadow: 0 2px 12px var(--primary-glow);
 }
 
 .seg-btn.seg-primary:hover:not(:disabled) {
   background: var(--primary-hover);
-  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.32);
+  box-shadow: 0 4px 18px var(--primary-glow);
 }
 
 .seg-btn.seg-primary:active:not(:disabled) {
@@ -393,6 +668,7 @@ label {
   display: flex;
   flex-direction: column;
   background: var(--panel);
+  border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -457,13 +733,23 @@ label {
   background: var(--panel-muted);
   box-shadow: none;
   cursor: pointer;
-  transition: background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  transition:
+    background-color 240ms ease,
+    background 140ms ease,
+    color 240ms ease,
+    border-color 240ms ease,
+    box-shadow 240ms ease,
+    transform 140ms ease;
 }
 
 .gallery-item:hover {
   background: #fff;
   box-shadow: var(--shadow-sm);
   transform: translateX(2px);
+}
+
+body.theme-night .gallery-item:hover {
+  background: #32323a;
 }
 
 .gallery-item.active {
@@ -515,7 +801,13 @@ label {
   place-items: center;
   cursor: pointer;
   opacity: 0.72;
-  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
+  transition:
+    background-color 240ms ease,
+    background 120ms ease,
+    color 240ms ease,
+    border-color 240ms ease,
+    box-shadow 240ms ease,
+    opacity 120ms ease;
 }
 
 .gallery-item:hover .gallery-remove,
@@ -609,7 +901,8 @@ label {
 
 .viewer-legend {
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
   font-size: 12px;
   color: var(--muted);
 }
@@ -617,8 +910,16 @@ label {
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 999px;
   font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  background: var(--panel-muted);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+  color: var(--ink);
 }
 
 .legend-item i {
@@ -626,6 +927,7 @@ label {
   height: 10px;
   border-radius: 2px;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .legend-item.crack i {
@@ -634,6 +936,15 @@ label {
 
 .legend-item.ok i {
   background: var(--ok);
+}
+
+/* 暗色图例：灰底芯片 + 更亮文字，避免角落小标签发暗 */
+html.theme-night .legend-item,
+body.theme-night .legend-item {
+  background: #2d2d35;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+  font-size: 13px;
 }
 
 .viewer-stage {
@@ -678,7 +989,12 @@ label {
   place-items: center;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition:
+    background-color 240ms ease,
+    background 120ms ease,
+    color 240ms ease,
+    border-color 240ms ease,
+    box-shadow 240ms ease;
 }
 
 .viewer-expand:hover:not(:disabled) {
@@ -761,6 +1077,7 @@ label {
   font-size: 22px;
   font-weight: 600;
   line-height: 1.1;
+  color: var(--ink);
 }
 
 .stat:nth-child(2) em {
@@ -802,8 +1119,8 @@ td {
 th {
   position: sticky;
   top: 0;
-  background: #eef2f6;
-  color: var(--muted);
+  background: var(--table-head-bg);
+  color: var(--table-head-fg);
   font-weight: 600;
   font-size: 11px;
   text-transform: lowercase;
@@ -836,10 +1153,10 @@ td {
 
 .hint {
   margin: 0;
-  padding: 12px 18px 16px;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
+  padding: 10px 18px 12px;
+  color: #7a7a7a;
+  font-size: 10px;
+  line-height: 1.4;
   background: var(--panel);
 }
 
@@ -849,8 +1166,8 @@ td {
   align-items: center;
   gap: 16px;
   padding: 4px 6px 2px;
-  color: var(--muted);
-  font-size: 12px;
+  color: #7a7a7a;
+  font-size: 10px;
   font-family: var(--mono);
   animation: rise 600ms ease both;
 }
@@ -889,6 +1206,7 @@ td {
   z-index: 1;
   width: min(440px, 100%);
   background: var(--panel);
+  border: 1px solid var(--panel-border);
   border-radius: 12px;
   box-shadow: 0 18px 48px rgba(26, 35, 50, 0.28);
   overflow: hidden;
@@ -984,7 +1302,12 @@ body.theme-night .date-wheel-highlight {
   font-weight: 500;
   color: var(--muted);
   scroll-snap-align: center;
-  transition: color 120ms ease, font-size 120ms ease;
+  transition:
+    background-color 240ms ease,
+    color 240ms ease,
+    border-color 240ms ease,
+    box-shadow 240ms ease,
+    font-size 120ms ease;
 }
 
 .date-wheel-item.is-active {
@@ -1068,6 +1391,7 @@ body.theme-night .date-wheel-highlight {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--panel);
+  border: 1px solid var(--panel-border);
   border-radius: 12px;
   box-shadow: 0 18px 48px rgba(26, 35, 50, 0.28);
   overflow: hidden;
@@ -1187,11 +1511,12 @@ body.theme-night .date-wheel-highlight {
 
 .status-pill.ready {
   background: var(--ok-soft);
-  color: #389e0d;
+  color: var(--ok);
 }
 
 .status-pill.ready::before {
   background: var(--ok);
+  box-shadow: 0 0 8px var(--ok-glow);
   animation: none;
 }
 
@@ -1224,10 +1549,10 @@ body.theme-night .date-wheel-highlight {
 @keyframes pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(22, 119, 255, 0.45);
+    box-shadow: 0 0 0 0 var(--primary-glow);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(22, 119, 255, 0);
+    box-shadow: 0 0 0 6px transparent;
   }
 }
 
