@@ -1,6 +1,6 @@
 """电池包视觉质检 — pywebview 桌面壳入口。
 
-启动本地静态前端，窗口表现为桌面应用。检测调用项目根目录 best.pt（YOLO-seg）。
+启动本地静态前端，窗口表现为桌面应用。检测权重需用户在界面选择 .pt 文件。
 支持从资源管理器 / 桌面拖入图像文件或文件夹。
 """
 
@@ -24,11 +24,11 @@ ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = ROOT.parent
 INDEX = ROOT / "static" / "index.html"
 BLANK_ICON = ROOT / "static" / "blank.ico"
-WEIGHTS = PROJECT_ROOT / "best.pt"
 
 # 与 src/predict.py 保持一致
 CONF = 0.223
 IMGSZ = 640
+ALLOWED_WEIGHT_EXTS = {".pt"}
 
 # 与前端 --bg / background_color 一致（按系统浅/深色解析）
 BG_DAY_HEX = "#EEF1F5"
@@ -71,6 +71,7 @@ class Api:
     def __init__(self) -> None:
         self._window: webview.Window | None = None
         self._model = None
+        self._weights_path: Path | None = None
         self._model_lock = threading.Lock()
         self._load_error: str | None = None
 
@@ -79,30 +80,67 @@ class Api:
 
     def get_engine_status(self) -> dict:
         """供前端显示当前推理引擎状态。"""
+        weights = self._weights_path
         return {
             "mode": "yolo",
-            "weights": str(WEIGHTS),
-            "weights_ok": WEIGHTS.is_file(),
+            "weights": str(weights) if weights else "",
+            "weights_name": weights.name if weights else "",
+            "weights_ok": bool(weights and weights.is_file()),
             "conf": CONF,
             "imgsz": IMGSZ,
             "model_loaded": self._model is not None,
             "load_error": self._load_error,
+            "need_weights": self._model is None,
         }
 
-    def load_model(self) -> dict:
-        """预加载 YOLO 权重；可在窗口 loaded 后调用。"""
+    def choose_weights(self) -> dict:
+        """弹出文件管理器选择 .pt 权重并加载。"""
+        if self._window is None:
+            return {"ok": False, "error": "window not ready"}
+
+        result = self._window.create_file_dialog(
+            webview.OPEN_DIALOG,
+            directory=str(PROJECT_ROOT),
+            allow_multiple=False,
+            file_types=("PyTorch Weights (*.pt)", "All files (*.*)"),
+        )
+        if not result:
+            return {"ok": False, "cancelled": True}
+
+        path = Path(result if isinstance(result, str) else result[0])
+        suffix = path.suffix.lower()
+        if suffix not in ALLOWED_WEIGHT_EXTS:
+            shown = suffix if suffix else "（无扩展名）"
+            return {
+                "ok": False,
+                "invalid_type": True,
+                "error": f"不支持的文件类型：{shown}。请选择 .pt 权重文件。",
+                "path": str(path),
+                "name": path.name,
+            }
+        if not path.is_file():
+            return {"ok": False, "error": f"文件不存在: {path}"}
+
         try:
-            self._ensure_model()
-        except Exception as exc:  # noqa: BLE001 — 透传给前端状态栏
+            from ultralytics import YOLO
+
+            with self._model_lock:
+                model = YOLO(str(path))
+                self._model = model
+                self._weights_path = path
+                self._load_error = None
+            return {
+                "ok": True,
+                "weights": str(path),
+                "name": path.name,
+                "conf": CONF,
+                "imgsz": IMGSZ,
+            }
+        except Exception as exc:  # noqa: BLE001 — 透传给前端
             self._load_error = str(exc)
+            with self._model_lock:
+                self._model = None
             return {"ok": False, "error": str(exc)}
-        self._load_error = None
-        return {
-            "ok": True,
-            "weights": str(WEIGHTS),
-            "conf": CONF,
-            "imgsz": IMGSZ,
-        }
 
     def detect_image(self, payload: dict | None = None) -> dict:
         """对单张图做 YOLO 推理，返回与接口规范一致的 records。"""
@@ -159,14 +197,7 @@ class Api:
         with self._model_lock:
             if self._model is not None:
                 return self._model
-            if not WEIGHTS.is_file():
-                raise FileNotFoundError(
-                    f"找不到权重: {WEIGHTS}\n请先完成训练并将 best.pt 放到项目根目录"
-                )
-            from ultralytics import YOLO
-
-            self._model = YOLO(str(WEIGHTS))
-            return self._model
+            raise FileNotFoundError("尚未选择权重文件，请先点击右上角选择 .pt 权重")
 
     @staticmethod
     def _resolve_source(path_raw, data_url):
@@ -197,6 +228,20 @@ class Api:
         )
 
     @classmethod
+    def _polygon_for_index(cls, result, index: int) -> list[list[float]] | None:
+        """提取实例分割轮廓像素坐标，供前端按裂纹形态绘制。"""
+        masks = getattr(result, "masks", None)
+        if masks is None:
+            return None
+        xy_list = getattr(masks, "xy", None)
+        if xy_list is None or index >= len(xy_list):
+            return None
+        poly = xy_list[index]
+        if poly is None or len(poly) < 3:
+            return None
+        return [[round(float(x), 1), round(float(y), 1)] for x, y in poly]
+
+    @classmethod
     def _records_for_image(cls, result, image_id: str) -> list[dict]:
         t_ms = round(cls._inference_time_ms(result), 1)
         boxes = result.boxes
@@ -211,11 +256,14 @@ class Api:
                     "x_max": -1,
                     "y_max": -1,
                     "inference_time_ms": t_ms,
+                    "polygon": None,
                 }
             ]
 
         rows: list[dict] = []
-        for xyxy, conf, cls_id in zip(boxes.xyxy, boxes.conf, boxes.cls):
+        for idx, (xyxy, conf, cls_id) in enumerate(
+            zip(boxes.xyxy, boxes.conf, boxes.cls)
+        ):
             x_min, y_min, x_max, y_max = (float(v) for v in xyxy)
             name = result.names[int(cls_id)]
             rows.append(
@@ -228,6 +276,7 @@ class Api:
                     "x_max": round(x_max, 1),
                     "y_max": round(y_max, 1),
                     "inference_time_ms": t_ms,
+                    "polygon": cls._polygon_for_index(result, idx),
                 }
             )
         return rows
@@ -469,17 +518,11 @@ def main() -> None:
 
     def on_loaded() -> None:
         _bind_drag_drop(window)
-
-        def _warmup() -> None:
-            status = api.load_model()
-            if window is None:
-                return
-            payload = json.dumps(status, ensure_ascii=False)
-            window.evaluate_js(
-                f"window.onEngineReady && window.onEngineReady({payload})"
-            )
-
-        threading.Thread(target=_warmup, daemon=True).start()
+        window.evaluate_js(
+            "window.onEngineReady && window.onEngineReady("
+            '{"ok": false, "need_weights": true}'
+            ")"
+        )
 
     if events is not None and hasattr(events, "loaded"):
         events.loaded += on_loaded

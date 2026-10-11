@@ -177,8 +177,8 @@ body.theme-night .tag.ok {
 
 html.theme-night .legend-item.crack i,
 body.theme-night .legend-item.crack i {
-  background: #ff4d4f;
-  box-shadow: 0 0 8px rgba(255, 77, 79, 0.55);
+  background: #00a8ff;
+  box-shadow: 0 0 8px rgba(0, 168, 255, 0.55);
 }
 
 html.theme-night .legend-item.ok i,
@@ -441,11 +441,19 @@ label {
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
+  border: none;
   border-radius: 999px;
   background: var(--primary-soft);
   color: var(--primary);
+  font: inherit;
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
 .status-pill::before {
@@ -456,6 +464,22 @@ label {
   background: var(--primary);
   box-shadow: 0 0 0 0 var(--primary-glow);
   animation: pulse 1.8s ease infinite;
+  flex-shrink: 0;
+}
+
+.status-pill.pick:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.status-pill.pick:hover::before {
+  background: #fff;
+  animation: none;
+}
+
+.status-pill:disabled {
+  cursor: wait;
+  opacity: 0.75;
 }
 
 .meta-text {
@@ -931,7 +955,8 @@ body.theme-night .gallery-item:hover {
 }
 
 .legend-item.crack i {
-  background: var(--crack);
+  background: #00a8ff;
+  box-shadow: 0 0 0 1px rgba(0, 168, 255, 0.35);
 }
 
 .legend-item.ok i {
@@ -997,10 +1022,24 @@ body.theme-night .legend-item {
     box-shadow 240ms ease;
 }
 
+html.theme-night .viewer-expand,
+body.theme-night .viewer-expand {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(0, 0, 0, 0.18);
+  color: #000000;
+}
+
 .viewer-expand:hover:not(:disabled) {
   background: var(--primary-soft);
   border-color: rgba(22, 119, 255, 0.35);
   color: var(--primary-active);
+}
+
+html.theme-night .viewer-expand:hover:not(:disabled),
+body.theme-night .viewer-expand:hover:not(:disabled) {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.28);
+  color: #000000;
 }
 
 .viewer-expand:disabled {
@@ -1180,7 +1219,8 @@ td {
 }
 
 .export-modal,
-.compare-modal {
+.compare-modal,
+.alert-modal {
   position: fixed;
   inset: 0;
   z-index: 2000;
@@ -1190,8 +1230,57 @@ td {
 }
 
 .export-modal[hidden],
-.compare-modal[hidden] {
+.compare-modal[hidden],
+.alert-modal[hidden] {
   display: none !important;
+}
+
+.alert-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 35, 50, 0.52);
+  backdrop-filter: blur(2px);
+}
+
+.alert-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  background: var(--panel);
+  border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(26, 35, 50, 0.28);
+  overflow: hidden;
+  animation: rise 220ms ease both;
+}
+
+.alert-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 10px;
+}
+
+.alert-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--warning);
+}
+
+.alert-message {
+  margin: 0;
+  padding: 0 18px 16px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.alert-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 0 18px 16px;
 }
 
 .export-backdrop {
@@ -1335,6 +1424,7 @@ body.theme-night .date-wheel-highlight {
   color: var(--ink);
   font-size: 14px;
   font-weight: 500;
+  color-scheme: inherit;
 }
 
 .export-field input:focus,
@@ -1342,12 +1432,46 @@ body.theme-night .date-wheel-highlight {
   outline: none;
   border-color: rgba(22, 119, 255, 0.55);
   box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.12);
-  background: #fff;
+  background: var(--panel-muted);
+  color: var(--ink);
+}
+
+.export-field input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.export-field input:-webkit-autofill,
+.export-field input:-webkit-autofill:hover,
+.export-field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  box-shadow: 0 0 0 1000px var(--panel-muted) inset;
+  transition: background-color 99999s ease-in-out 0s;
 }
 
 .export-field input[readonly] {
   color: var(--muted);
   cursor: default;
+}
+
+html.theme-night .export-field input,
+html.theme-night .export-field select,
+body.theme-night .export-field input,
+body.theme-night .export-field select {
+  background: var(--panel-muted);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+html.theme-night .export-field input:focus,
+html.theme-night .export-field select:focus,
+body.theme-night .export-field input:focus,
+body.theme-night .export-field select:focus {
+  background: var(--panel-muted);
+  color: var(--ink);
+  border-color: rgba(10, 132, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.18);
 }
 
 .export-preview {

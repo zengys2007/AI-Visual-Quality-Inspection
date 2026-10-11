@@ -21,6 +21,8 @@
   let selectedIds = new Set();
   let busy = false;
   let engineReady = false;
+  let weightsLabel = "";
+  let choosingWeights = false;
 
   const els = {
     fileInput: document.getElementById("fileInput"),
@@ -66,6 +68,12 @@
     wheelDay: document.getElementById("wheelDay"),
     themeDayBtn: document.getElementById("themeDayBtn"),
     themeNightBtn: document.getElementById("themeNightBtn"),
+    alertModal: document.getElementById("alertModal"),
+    alertBackdrop: document.getElementById("alertBackdrop"),
+    alertClose: document.getElementById("alertClose"),
+    alertOk: document.getElementById("alertOk"),
+    alertTitle: document.getElementById("alertTitle"),
+    alertMessage: document.getElementById("alertMessage"),
     statTotal: document.getElementById("statTotal"),
     statNg: document.getElementById("statNg"),
     statOk: document.getElementById("statOk"),
@@ -85,7 +93,86 @@
   function setConnStatus(text, kind) {
     if (!els.connStatus) return;
     els.connStatus.textContent = text;
-    els.connStatus.className = `status-pill${kind ? ` ${kind}` : ""}`;
+    els.connStatus.title =
+      kind === "ready"
+        ? `当前权重：${text}（点击可更换）`
+        : "点击选择 YOLO 权重文件 (.pt)";
+    els.connStatus.className = `status-pill${kind ? ` ${kind}` : " pick"}`;
+    els.connStatus.disabled = choosingWeights || busy;
+  }
+
+  function showAlert(title, message) {
+    if (!els.alertModal) {
+      window.alert(message);
+      return;
+    }
+    if (els.alertTitle) els.alertTitle.textContent = title || "提示";
+    if (els.alertMessage) els.alertMessage.textContent = message || "";
+    els.alertModal.hidden = false;
+  }
+
+  function closeAlert() {
+    if (els.alertModal) els.alertModal.hidden = true;
+  }
+
+  function weightsStatusText() {
+    return weightsLabel ? `YOLO · ${weightsLabel}` : "选择权重文件";
+  }
+
+  async function chooseWeightsFile() {
+    if (choosingWeights || busy) return;
+    const api = pyApi();
+    if (!api || typeof api.choose_weights !== "function") {
+      setStatus("请通过 app/desktop.py 启动桌面应用以选择权重");
+      setConnStatus("未连接后端", "error");
+      return;
+    }
+
+    choosingWeights = true;
+    setConnStatus("选择中…", "busy");
+    setButtons();
+    try {
+      const res = await api.choose_weights();
+      if (!res || res.cancelled) {
+        setConnStatus(
+          engineReady ? weightsStatusText() : "选择权重文件",
+          engineReady ? "ready" : "pick"
+        );
+        setStatus(engineReady ? "已取消更换权重" : "请选择 .pt 权重文件后再检测");
+        return;
+      }
+      if (res.invalid_type) {
+        showAlert(
+          "文件类型不符",
+          res.error || "所选文件不是 .pt 权重，请重新选择。"
+        );
+        setConnStatus(
+          engineReady ? weightsStatusText() : "选择权重文件",
+          engineReady ? "ready" : "pick"
+        );
+        setStatus("权重文件类型不符，请选择 .pt");
+        return;
+      }
+      if (!res.ok) {
+        engineReady = false;
+        weightsLabel = "";
+        setConnStatus("选择权重文件", "error");
+        setStatus(res.error || "权重加载失败");
+        showAlert("权重加载失败", res.error || "无法加载所选权重文件。");
+        return;
+      }
+      onEngineReady(res);
+    } catch (err) {
+      setConnStatus(
+        engineReady ? weightsStatusText() : "选择权重文件",
+        engineReady ? "ready" : "error"
+      );
+      setStatus(err && err.message ? err.message : String(err));
+    } finally {
+      choosingWeights = false;
+      if (els.connStatus) els.connStatus.disabled = busy;
+      setButtons();
+    }
   }
 
   function activeImage() {
@@ -151,14 +238,27 @@
   function onEngineReady(status) {
     if (status && status.ok) {
       engineReady = true;
-      setConnStatus("YOLO · best.pt", "ready");
+      weightsLabel = status.name || status.weights_name || "weights.pt";
+      if (!status.name && status.weights) {
+        const parts = String(status.weights).split(/[/\\]/);
+        weightsLabel = parts[parts.length - 1] || weightsLabel;
+      }
+      setConnStatus(weightsStatusText(), "ready");
       setStatus(
-        `模型已加载 · conf=${status.conf ?? 0.223} · imgsz=${status.imgsz ?? 640}`
+        `模型已加载 · ${weightsLabel} · conf=${status.conf ?? 0.223} · imgsz=${
+          status.imgsz ?? 640
+        }`
       );
+    } else if (status && status.need_weights) {
+      engineReady = false;
+      weightsLabel = "";
+      setConnStatus("选择权重文件", "pick");
+      setStatus("请先点击右上角选择 .pt 权重文件");
     } else {
       engineReady = false;
-      const err = (status && status.error) || "模型加载失败";
-      setConnStatus("模型未就绪", "error");
+      weightsLabel = "";
+      const err = (status && status.error) || "模型未就绪";
+      setConnStatus("选择权重文件", "error");
       setStatus(err);
     }
     setButtons();
@@ -335,6 +435,11 @@
       setConnStatus("未连接后端", "error");
       return;
     }
+    if (!engineReady) {
+      setStatus("请先点击右上角选择 .pt 权重文件");
+      setConnStatus("选择权重文件", "pick");
+      return;
+    }
 
     busy = true;
     setButtons();
@@ -368,7 +473,10 @@
 
     busy = false;
     setButtons();
-    setConnStatus(engineReady ? "YOLO · best.pt" : "模型未就绪", engineReady ? "ready" : "error");
+    setConnStatus(
+      engineReady ? weightsStatusText() : "选择权重文件",
+      engineReady ? "ready" : "pick"
+    );
     if (failed > 0) {
       setStatus(`部分检测失败: ${failed}/${targets.length}`);
     } else {
@@ -763,18 +871,54 @@
     openExportModal(built);
   }
 
+  function drawCrackPath(targetCtx, rec) {
+    const poly = Array.isArray(rec.polygon) ? rec.polygon : null;
+    if (poly && poly.length >= 3) {
+      targetCtx.beginPath();
+      targetCtx.moveTo(Number(poly[0][0]), Number(poly[0][1]));
+      for (let i = 1; i < poly.length; i += 1) {
+        targetCtx.lineTo(Number(poly[i][0]), Number(poly[i][1]));
+      }
+      targetCtx.closePath();
+      return true;
+    }
+    const x = Number(rec.x_min);
+    const y = Number(rec.y_min);
+    const w = Number(rec.x_max) - x;
+    const h = Number(rec.y_max) - y;
+    if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) return false;
+    targetCtx.beginPath();
+    targetCtx.rect(x, y, w, h);
+    return true;
+  }
+
   function drawDetections(targetCtx, width, records) {
     if (!targetCtx || !records) return;
+    const crackLineW = Math.max(1.5, Math.round(width / 500));
+    const boxLineW = Math.max(2, Math.round(width / 400));
     for (const rec of records) {
       if (rec.class_name === "Ok") continue;
-      const x = rec.x_min;
-      const y = rec.y_min;
-      const w = rec.x_max - rec.x_min;
-      const h = rec.y_max - rec.y_min;
-      targetCtx.lineWidth = Math.max(2, Math.round(width / 400));
+
+      // 1) 裂纹分割轮廓：蓝色填充 + 蓝边
+      if (drawCrackPath(targetCtx, rec)) {
+        targetCtx.fillStyle = "rgba(0, 120, 255, 0.42)";
+        targetCtx.fill();
+        targetCtx.strokeStyle = "#00a8ff";
+        targetCtx.lineWidth = crackLineW;
+        targetCtx.lineJoin = "round";
+        targetCtx.lineCap = "round";
+        targetCtx.stroke();
+      }
+
+      // 2) 外接红色矩形框 + 置信度（与 CSV 的 xyxy 一致）
+      const x = Number(rec.x_min);
+      const y = Number(rec.y_min);
+      const w = Number(rec.x_max) - x;
+      const h = Number(rec.y_max) - y;
+      if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
+
+      targetCtx.lineWidth = boxLineW;
       targetCtx.strokeStyle = "#ff4d4f";
-      targetCtx.fillStyle = "rgba(255, 77, 79, 0.14)";
-      targetCtx.fillRect(x, y, w, h);
       targetCtx.strokeRect(x, y, w, h);
 
       const label = `Surface_Crack ${Number(rec.confidence).toFixed(2)}`;
@@ -994,11 +1138,12 @@
       els.selectAllBtn.disabled = !hasImages || busy;
       els.selectAllBtn.textContent = allSelected() ? "取消全选" : "全选";
     }
-    els.detectOneBtn.disabled = !hasActive || busy;
-    els.detectAllBtn.disabled = !hasSelection || busy;
+    els.detectOneBtn.disabled = !hasActive || busy || !engineReady;
+    els.detectAllBtn.disabled = !hasSelection || busy || !engineReady;
     els.exportBtn.disabled = !canExport || busy;
     els.fileInput.disabled = busy;
     els.folderInput.disabled = busy;
+    if (els.connStatus) els.connStatus.disabled = choosingWeights || busy;
   }
 
   function renderAll() {
@@ -1081,6 +1226,14 @@
       applyTheme("night", { persist: true })
     );
   }
+  if (els.connStatus) {
+    els.connStatus.addEventListener("click", () => {
+      chooseWeightsFile();
+    });
+  }
+  if (els.alertOk) els.alertOk.addEventListener("click", closeAlert);
+  if (els.alertClose) els.alertClose.addEventListener("click", closeAlert);
+  if (els.alertBackdrop) els.alertBackdrop.addEventListener("click", closeAlert);
   try {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const onSystemTheme = () => {
@@ -1127,6 +1280,10 @@
   }
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    if (els.alertModal && !els.alertModal.hidden) {
+      closeAlert();
+      return;
+    }
     if (els.exportModal && !els.exportModal.hidden) {
       closeExportModal();
       setStatus("已取消导出");
@@ -1139,9 +1296,10 @@
 
   renderAll();
   applyTheme(resolveInitialTheme());
-  setStatus("就绪 · 等待加载 YOLO 模型");
+  setConnStatus("选择权重文件", "pick");
+  setStatus("请先点击右上角选择 .pt 权重文件");
 
-  // 桌面端会在模型预热后回调 onEngineReady；浏览器直开则提示需走 desktop.py
+  // 桌面端 loaded 后会回调 onEngineReady；浏览器直开则提示需走 desktop.py
   window.setTimeout(async () => {
     const api = pyApi();
     if (!api) {
@@ -1157,12 +1315,14 @@
             ok: true,
             conf: st.conf,
             imgsz: st.imgsz,
+            name: st.weights_name,
+            weights: st.weights,
           });
-        } else if (st && st.load_error) {
-          onEngineReady({ ok: false, error: st.load_error });
+        } else {
+          onEngineReady({ ok: false, need_weights: true });
         }
       } catch {
-        /* 等待 onEngineReady */
+        onEngineReady({ ok: false, need_weights: true });
       }
     }
   }, 300);

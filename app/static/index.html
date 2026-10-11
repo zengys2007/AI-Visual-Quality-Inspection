@@ -56,7 +56,15 @@
           </div>
         </div>
         <div class="titlebar-meta">
-          <span class="status-pill" id="connStatus">加载模型中…</span>
+          <button
+            type="button"
+            class="status-pill pick"
+            id="connStatus"
+            title="点击选择 YOLO 权重文件 (.pt)"
+            aria-label="选择 YOLO 权重文件"
+          >
+            选择权重文件
+          </button>
           <span class="meta-text" id="sessionInfo">未导入图像</span>
         </div>
       </header>
@@ -120,7 +128,7 @@
             <canvas id="previewCanvas"></canvas>
             <div class="viewer-placeholder" id="viewerPlaceholder">
               <strong>选择左侧图像开始预览</strong>
-              <span>检测框与置信度将叠加在原图上显示</span>
+              <span>裂纹轮廓与蓝色高亮将叠加在原图上显示</span>
             </div>
             <button
               type="button"
@@ -181,7 +189,7 @@
               </tbody>
             </table>
           </div>
-          <p class="hint">检测使用项目根目录 best.pt（与 predict.py 同权重 / conf=0.223）。点击预览右下角图标可对比检测前后全貌。</p>
+          <p class="hint">请先点击右上角选择 .pt 权重（conf=0.223）。点击预览右下角图标可对比检测前后全貌。</p>
         </aside>
       </main>
 
@@ -259,6 +267,20 @@
               <div class="compare-empty" id="compareAfterEmpty">尚未检测，暂无叠加结果</div>
             </div>
           </figure>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert-modal" id="alertModal" hidden>
+      <div class="alert-backdrop" id="alertBackdrop"></div>
+      <div class="alert-dialog" role="alertdialog" aria-modal="true" aria-labelledby="alertTitle" aria-describedby="alertMessage">
+        <div class="alert-head">
+          <h3 id="alertTitle">文件类型不符</h3>
+          <button type="button" class="compare-close" id="alertClose" aria-label="关闭">×</button>
+        </div>
+        <p class="alert-message" id="alertMessage">请选择 .pt 权重文件。</p>
+        <div class="alert-actions">
+          <button type="button" class="btn btn-primary" id="alertOk">知道了</button>
         </div>
       </div>
     </div>
