@@ -105,6 +105,52 @@ class Api:
         self._conf = round(conf, 3)
         return {"ok": True, "conf": self._conf}
 
+    def recommend_conf(self) -> dict:
+        """在验证集上按 Box F1 曲线峰值推荐置信度阈值。"""
+        if self._model is None:
+            return {"ok": False, "need_weights": True, "error": "尚未选择权重文件"}
+
+        try:
+            import os
+
+            import numpy as np
+            from ultralytics.utils.metrics import smooth
+
+            os.chdir(PROJECT_ROOT)
+            data_yaml = PROJECT_ROOT / "configs" / "data.yaml"
+            metrics = self._model.val(
+                data=str(data_yaml),
+                imgsz=IMGSZ,
+                batch=16,
+                split="val",
+                plots=False,
+                verbose=False,
+            )
+            box = metrics.box
+            px = np.asarray(box.px, dtype=float)
+            f1_curve = np.asarray(box.f1_curve, dtype=float)
+            if f1_curve.ndim == 1:
+                mean_f1 = f1_curve
+            else:
+                mean_f1 = f1_curve.mean(axis=0)
+            if px.size == 0 or mean_f1.size == 0:
+                return {"ok": False, "error": "验证结果中无 F1 曲线"}
+
+            idx = int(smooth(mean_f1, 0.1).argmax())
+            idx = max(0, min(idx, len(px) - 1))
+            conf = round(float(px[idx]), 3)
+            f1 = round(float(mean_f1[idx]), 4)
+            self._conf = conf
+            return {
+                "ok": True,
+                "conf": conf,
+                "f1": f1,
+                "weights": str(self._weights_path) if self._weights_path else "",
+                "weights_name": self._weights_path.name if self._weights_path else "",
+            }
+        except Exception as exc:  # noqa: BLE001 — 透传给前端
+            return {"ok": False, "error": str(exc)}
+
     def choose_weights(self) -> dict:
         """弹出文件管理器选择 .pt 权重并加载。"""
         if self._window is None:

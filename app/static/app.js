@@ -23,7 +23,8 @@
   let engineReady = false;
   let weightsLabel = "";
   let choosingWeights = false;
-  let detectConf = 0.223;
+  /** @type {number | null} */
+  let detectConf = null;
 
   const els = {
     fileInput: document.getElementById("fileInput"),
@@ -76,7 +77,7 @@
     alertTitle: document.getElementById("alertTitle"),
     alertMessage: document.getElementById("alertMessage"),
     confCurrent: document.getElementById("confCurrent"),
-    confInput: document.getElementById("confInput"),
+    confRecommend: document.getElementById("confRecommend"),
     statTotal: document.getElementById("statTotal"),
     statNg: document.getElementById("statNg"),
     statOk: document.getElementById("statOk"),
@@ -132,6 +133,8 @@
     }
 
     choosingWeights = true;
+    clearConfField();
+    setRecommendConf("—");
     setConnStatus("选择中…", "busy");
     setButtons();
     try {
@@ -141,6 +144,10 @@
           engineReady ? weightsStatusText() : "选择权重文件",
           engineReady ? "ready" : "pick"
         );
+        if (!engineReady) {
+          clearConfField();
+          setRecommendConf("—");
+        }
         setStatus(engineReady ? "已取消更换权重" : "请选择 .pt 权重文件后再检测");
         return;
       }
@@ -160,11 +167,17 @@
         engineReady = false;
         weightsLabel = "";
         setConnStatus("选择权重文件", "error");
+        clearConfField();
+        setRecommendConf("—");
         setStatus(res.error || "权重加载失败");
         showAlert("权重加载失败", res.error || "无法加载所选权重文件。");
         return;
       }
       onEngineReady(res);
+      choosingWeights = false;
+      if (els.connStatus) els.connStatus.disabled = busy;
+      setButtons();
+      await refreshRecommendConf();
     } catch (err) {
       setConnStatus(
         engineReady ? weightsStatusText() : "选择权重文件",
@@ -224,20 +237,43 @@
     return Number(value).toFixed(3);
   }
 
+  function clearConfField() {
+    detectConf = null;
+    if (els.confCurrent) els.confCurrent.value = "";
+  }
+
   function refreshConfDisplay() {
-    if (els.confCurrent) els.confCurrent.textContent = formatConf(detectConf);
-    if (els.confInput && document.activeElement !== els.confInput) {
-      els.confInput.value = formatConf(detectConf);
+    if (!els.confCurrent) return;
+    if (detectConf == null || !Number.isFinite(detectConf)) {
+      els.confCurrent.value = "";
+      return;
+    }
+    if (document.activeElement !== els.confCurrent) {
+      els.confCurrent.value = formatConf(detectConf);
     }
   }
 
+  function setRecommendConf(text, { isNumber = false } = {}) {
+    if (!els.confRecommend) return;
+    els.confRecommend.textContent = text;
+    els.confRecommend.classList.toggle("is-pending", !isNumber);
+  }
+
   function applyConfInput({ silent = false } = {}) {
-    const raw = els.confInput ? els.confInput.value : String(detectConf);
+    if (!els.confCurrent) return false;
+    const raw = String(els.confCurrent.value || "").trim();
+    if (!raw) {
+      if (!silent) {
+        showAlert("置信度为空", "请等待推荐值填入，或手动输入 0 ~ 1 之间的数字。");
+        setStatus("置信度为空，请先填写或等待推荐值");
+      }
+      return false;
+    }
     const v = Number(raw);
     if (!Number.isFinite(v) || v < 0 || v > 1) {
       if (!silent) {
         showAlert("置信度无效", "请输入 0 ~ 1 之间的数字（例如 0.223）。");
-        setStatus("置信度无效，已恢复为当前值");
+        setStatus("置信度无效");
       }
       refreshConfDisplay();
       return false;
@@ -254,12 +290,55 @@
     return true;
   }
 
+  async function refreshRecommendConf() {
+    const api = pyApi();
+    if (!api || typeof api.recommend_conf !== "function") {
+      setRecommendConf("—");
+      return null;
+    }
+    clearConfField();
+    setRecommendConf("计算中…");
+    setStatus("正在依据当前权重计算推荐置信度…");
+    if (els.confCurrent) els.confCurrent.disabled = true;
+    try {
+      const res = await api.recommend_conf();
+      if (!res || !res.ok) {
+        setRecommendConf("—");
+        clearConfField();
+        if (res && res.error) setStatus(`推荐置信度计算失败: ${res.error}`);
+        return null;
+      }
+      detectConf = Math.round(Number(res.conf) * 1000) / 1000;
+      refreshConfDisplay();
+      setRecommendConf(formatConf(detectConf), { isNumber: true });
+      if (api && typeof api.set_conf === "function") {
+        api.set_conf(detectConf).catch(() => {});
+      }
+      setStatus(
+        `推荐置信度 ${formatConf(detectConf)}（Box F1≈${
+          res.f1 != null ? Number(res.f1).toFixed(3) : "—"
+        }），已自动填入当前置信度`
+      );
+      return res;
+    } catch (err) {
+      setRecommendConf("—");
+      clearConfField();
+      setStatus(err && err.message ? err.message : String(err));
+      return null;
+    } finally {
+      if (els.confCurrent) els.confCurrent.disabled = busy;
+      setButtons();
+    }
+  }
+
   async function yoloDetect(image) {
     const api = pyApi();
     if (!api || typeof api.detect_image !== "function") {
       throw new Error("请通过 app/desktop.py 启动桌面应用以使用 YOLO 检测");
     }
-    applyConfInput({ silent: true });
+    if (!applyConfInput({ silent: true }) || detectConf == null) {
+      throw new Error("请先填写置信度，或等待推荐值自动填入");
+    }
     const payload = { name: image.name, conf: detectConf };
     if (image.path) {
       payload.path = image.path;
@@ -282,25 +361,24 @@
         weightsLabel = parts[parts.length - 1] || weightsLabel;
       }
       setConnStatus(weightsStatusText(), "ready");
-      if (status.conf != null && Number.isFinite(Number(status.conf))) {
-        detectConf = Math.round(Number(status.conf) * 1000) / 1000;
-        refreshConfDisplay();
-      }
-      setStatus(
-        `模型已加载 · ${weightsLabel} · conf=${formatConf(detectConf)} · imgsz=${
-          status.imgsz ?? 640
-        }`
-      );
+      // 推荐值算出前置信度栏保持为空
+      clearConfField();
+      setRecommendConf("计算中…");
+      setStatus(`模型已加载 · ${weightsLabel} · 正在计算推荐置信度…`);
     } else if (status && status.need_weights) {
       engineReady = false;
       weightsLabel = "";
       setConnStatus("选择权重文件", "pick");
+      clearConfField();
+      setRecommendConf("—");
       setStatus("请先点击右上角选择 .pt 权重文件");
     } else {
       engineReady = false;
       weightsLabel = "";
       const err = (status && status.error) || "模型未就绪";
       setConnStatus("选择权重文件", "error");
+      clearConfField();
+      setRecommendConf("—");
       setStatus(err);
     }
     setButtons();
@@ -480,6 +558,9 @@
     if (!engineReady) {
       setStatus("请先点击右上角选择 .pt 权重文件");
       setConnStatus("选择权重文件", "pick");
+      return;
+    }
+    if (!applyConfInput({ silent: false }) || detectConf == null) {
       return;
     }
 
@@ -1185,8 +1266,13 @@
     els.exportBtn.disabled = !canExport || busy;
     els.fileInput.disabled = busy;
     els.folderInput.disabled = busy;
-    if (els.confInput) els.confInput.disabled = busy;
     if (els.connStatus) els.connStatus.disabled = choosingWeights || busy;
+    if (els.confCurrent) {
+      const recommending =
+        els.confRecommend &&
+        String(els.confRecommend.textContent || "").includes("计算中");
+      els.confCurrent.disabled = busy || choosingWeights || Boolean(recommending);
+    }
   }
 
   function renderAll() {
@@ -1274,15 +1360,21 @@
       chooseWeightsFile();
     });
   }
-  if (els.confInput) {
-    els.confInput.addEventListener("keydown", (e) => {
+  if (els.confCurrent) {
+    els.confCurrent.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
         applyConfInput();
-        els.confInput.blur();
+        els.confCurrent.blur();
       }
     });
-    els.confInput.addEventListener("blur", () => applyConfInput({ silent: true }));
+    els.confCurrent.addEventListener("blur", () => {
+      if (String(els.confCurrent.value || "").trim()) {
+        applyConfInput({ silent: true });
+      } else {
+        detectConf = null;
+      }
+    });
   }
   if (els.alertOk) els.alertOk.addEventListener("click", closeAlert);
   if (els.alertClose) els.alertClose.addEventListener("click", closeAlert);
@@ -1349,7 +1441,8 @@
 
   renderAll();
   applyTheme(resolveInitialTheme());
-  refreshConfDisplay();
+  clearConfField();
+  setRecommendConf("—");
   setConnStatus("选择权重文件", "pick");
   setStatus("请先点击右上角选择 .pt 权重文件");
 
