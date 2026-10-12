@@ -7,9 +7,10 @@
   const CLASS_OK = "Ok";
   const CSV_HEADER =
     "image_id,class_name,confidence,x_min,y_min,x_max,y_max,inference_time_ms";
-  const EXPORT_PREFIX = "电池包裂纹";
+  const EXPORT_PREFIX = "兴欣_检测结果";
   const LS_LINE = "qi_export_line";
   const LS_SHIFT = "qi_export_shift";
+  const LS_DETAIL = "qi_export_detail";
   /** 仅在用户点击日/夜切换时写入；缺省则跟随系统 */
   const LS_THEME = "qi_theme_user";
   const WHEEL_ITEM_H = 36;
@@ -63,6 +64,8 @@
     exportClose: document.getElementById("exportClose"),
     exportCancel: document.getElementById("exportCancel"),
     exportForm: document.getElementById("exportForm"),
+    exportDetail: document.getElementById("exportDetail"),
+    exportDetailFields: document.getElementById("exportDetailFields"),
     exportLine: document.getElementById("exportLine"),
     exportShift: document.getElementById("exportShift"),
     exportDate: document.getElementById("exportDate"),
@@ -688,7 +691,12 @@
     return cleaned || fallback;
   }
 
-  function buildExportFilename(line, shift, dateYmd) {
+  function exportDetailOn() {
+    return Boolean(els.exportDetail?.checked);
+  }
+
+  function buildExportFilename(line, shift, dateYmd, withDetail) {
+    if (!withDetail) return `${EXPORT_PREFIX}.csv`;
     const linePart = sanitizeNamePart(line, "产线");
     const shiftPart = sanitizeNamePart(shift, "班次");
     const datePart = /^\d{8}$/.test(String(dateYmd || "")) ? String(dateYmd) : todayYmd();
@@ -819,7 +827,8 @@
     els.exportPreview.textContent = buildExportFilename(
       els.exportLine?.value,
       els.exportShift?.value,
-      dateYmd
+      dateYmd,
+      exportDetailOn()
     );
   }
 
@@ -840,10 +849,22 @@
       /* ignore */
     }
     if (els.exportLine && !els.exportLine.value) els.exportLine.value = "A线";
-    initDateWheels(todayParts());
+    let detailOn = false;
+    try {
+      detailOn = localStorage.getItem(LS_DETAIL) === "1";
+    } catch {
+      /* ignore */
+    }
+    if (els.exportDetail) els.exportDetail.checked = detailOn;
+    if (els.exportDetailFields) els.exportDetailFields.hidden = !detailOn;
+    if (detailOn) initDateWheels(todayParts());
     refreshExportPreview();
     els.exportModal.hidden = false;
     window.setTimeout(() => {
+      if (!exportDetailOn()) {
+        refreshExportPreview();
+        return;
+      }
       initDateWheels(todayParts());
       refreshExportPreview();
       els.exportLine?.focus();
@@ -1259,6 +1280,27 @@
   });
   els.exportBtn.addEventListener("click", exportCsv);
 
+  if (els.exportDetail) {
+    els.exportDetail.addEventListener("change", () => {
+      const on = exportDetailOn();
+      if (els.exportDetailFields) els.exportDetailFields.hidden = !on;
+      try {
+        localStorage.setItem(LS_DETAIL, on ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      if (on) {
+        initDateWheels(todayParts());
+        window.setTimeout(() => {
+          initDateWheels(todayParts());
+          refreshExportPreview();
+          els.exportLine?.focus();
+        }, 40);
+        return;
+      }
+      refreshExportPreview();
+    });
+  }
   if (els.exportLine) {
     els.exportLine.addEventListener("input", refreshExportPreview);
   }
@@ -1273,21 +1315,24 @@
     els.exportForm.addEventListener("submit", (e) => {
       e.preventDefault();
       if (!pendingExport) return;
+      const withDetail = exportDetailOn();
       const line = els.exportLine?.value || "";
       const shift = els.exportShift?.value || "";
-      if (!sanitizeNamePart(line, "")) {
+      if (withDetail && !sanitizeNamePart(line, "")) {
         setStatus("请填写产线");
         els.exportLine?.focus();
         return;
       }
       const date = readWheelDate();
       if (els.exportDate) els.exportDate.value = date.ymd;
-      const filename = buildExportFilename(line, shift, date.ymd);
-      try {
-        localStorage.setItem(LS_LINE, sanitizeNamePart(line, "A线"));
-        localStorage.setItem(LS_SHIFT, sanitizeNamePart(shift, "早班"));
-      } catch {
-        /* ignore */
+      const filename = buildExportFilename(line, shift, date.ymd, withDetail);
+      if (withDetail) {
+        try {
+          localStorage.setItem(LS_LINE, sanitizeNamePart(line, "A线"));
+          localStorage.setItem(LS_SHIFT, sanitizeNamePart(shift, "早班"));
+        } catch {
+          /* ignore */
+        }
       }
       saveExportWithFilename(filename);
     });

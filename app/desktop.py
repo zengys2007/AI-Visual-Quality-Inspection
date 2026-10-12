@@ -26,7 +26,7 @@ INDEX = ROOT / "static" / "index.html"
 BLANK_ICON = ROOT / "static" / "blank.ico"
 
 # 与 src/predict.py 保持一致
-CONF = 0.223
+CONF = 0.19
 IMGSZ = 640
 ALLOWED_WEIGHT_EXTS = {".pt"}
 
@@ -203,7 +203,7 @@ class Api:
         if self._window is None:
             return {"ok": False, "error": "window not ready"}
 
-        default_name = filename or "电池包裂纹_产线_班次_日期.csv"
+        default_name = filename or "兴欣_检测结果.csv"
         if not default_name.lower().endswith(".csv"):
             default_name += ".csv"
 

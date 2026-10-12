@@ -210,7 +210,7 @@
 
       <footer class="statusbar">
         <span id="statusMsg">就绪</span>
-        <span>导出：电池包裂纹_产线_班次_日期.csv · Surface_Crack / Ok · UTF-8 八列</span>
+        <span>导出：兴欣_检测结果.csv · Surface_Crack / Ok · UTF-8 八列</span>
       </footer>
     </div>
 
@@ -224,31 +224,40 @@
           <button type="button" class="compare-close" id="exportClose" aria-label="关闭">×</button>
         </div>
         <form class="export-form" id="exportForm">
-          <label class="export-field">
-            <span>产线</span>
-            <input type="text" id="exportLine" name="line" maxlength="32" placeholder="例如 A线" required autocomplete="off" />
-          </label>
-          <label class="export-field">
-            <span>班次</span>
-            <select id="exportShift" name="shift" required>
-              <option value="早班">早班</option>
-              <option value="中班">中班</option>
-              <option value="晚班">晚班</option>
-            </select>
-          </label>
-          <div class="export-field">
-            <span>日期</span>
-            <input type="hidden" id="exportDate" name="date" />
-            <div class="date-wheel" id="dateWheel" aria-label="日期滚轮选择">
-              <div class="date-wheel-highlight" aria-hidden="true"></div>
-              <div class="date-wheel-col" id="wheelYear" data-unit="year"></div>
-              <div class="date-wheel-col" id="wheelMonth" data-unit="month"></div>
-              <div class="date-wheel-col" id="wheelDay" data-unit="day"></div>
+          <div class="export-option">
+            <span class="export-option-label" id="exportDetailLabel">附加产线、班次和日期</span>
+            <label class="export-switch">
+              <input type="checkbox" id="exportDetail" aria-labelledby="exportDetailLabel" />
+              <span class="export-switch-ui" aria-hidden="true"></span>
+            </label>
+          </div>
+          <div id="exportDetailFields" hidden>
+            <label class="export-field">
+              <span>产线</span>
+              <input type="text" id="exportLine" name="line" maxlength="32" placeholder="例如 A线" autocomplete="off" />
+            </label>
+            <label class="export-field">
+              <span>班次</span>
+              <select id="exportShift" name="shift">
+                <option value="早班">早班</option>
+                <option value="中班">中班</option>
+                <option value="晚班">晚班</option>
+              </select>
+            </label>
+            <div class="export-field">
+              <span>日期</span>
+              <input type="hidden" id="exportDate" name="date" />
+              <div class="date-wheel" id="dateWheel" aria-label="日期滚轮选择">
+                <div class="date-wheel-highlight" aria-hidden="true"></div>
+                <div class="date-wheel-col" id="wheelYear" data-unit="year"></div>
+                <div class="date-wheel-col" id="wheelMonth" data-unit="month"></div>
+                <div class="date-wheel-col" id="wheelDay" data-unit="day"></div>
+              </div>
             </div>
           </div>
           <div class="export-preview">
             <span>文件名预览</span>
-            <code id="exportPreview">电池包裂纹_A线_早班_20261010.csv</code>
+            <code id="exportPreview">兴欣_检测结果.csv</code>
           </div>
           <div class="export-actions">
             <button type="button" class="btn btn-secondary" id="exportCancel">取消</button>

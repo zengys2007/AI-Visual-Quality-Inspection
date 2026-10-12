@@ -20,14 +20,14 @@ WEIGHTS = ROOT / "runs" / "segment" / "surface_crack" / "weights" / "best.pt"
 SOURCE = ROOT / "data" / "yolo" / "images" / "val"  # 单张图或文件夹
 
 # 推理参数
-CONF = 0.2
+CONF = 0.25
 IMGSZ = 640
 SAVE = True
 STREAM = True  # 大量图片时省内存
 
 # 输出目录结构:
 #   runs/segment/surface_crack_predict/
-#     ├── 视觉检测团队_检测结果.csv
+#     ├── 兴欣_检测结果.csv
 #     ├── images/   ← 叠加可视化图
 #     └── txt/      ← 与测试集同格式的多边形标注
 PROJECT = ROOT / "runs" / "segment"
@@ -35,7 +35,7 @@ NAME = "surface_crack_predict"
 EXIST_OK = True
 IMG_DIR = "images"
 TXT_DIR = "txt"
-CSV_NAME = "视觉检测团队_检测结果.csv"
+CSV_NAME = "兴欣_检测结果.csv"
 # ─────────────────────────────────────────────────────
 CSV_HEADER = [
     "image_id",
