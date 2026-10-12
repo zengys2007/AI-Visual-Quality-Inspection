@@ -92,7 +92,7 @@
         </div>
         <div class="conf-bar" aria-label="置信度设置">
           <label class="conf-current">
-            <span>当前置信度</span>
+            <span>置信度阈值</span>
             <input
               type="number"
               id="confCurrent"
@@ -101,13 +101,9 @@
               step="0.001"
               inputmode="decimal"
               placeholder=""
-              title="可手动修改，范围 0 ~ 1；推荐值算出后会自动填入"
+              title="可手动修改，范围 0 ~ 1"
             />
           </label>
-          <p class="conf-recommend">
-            依据当前权重文件，推荐置信度为：
-            <em id="confRecommend">—</em>
-          </p>
         </div>
         <div class="toolbar-group">
           <div class="segmented" role="group" aria-label="检测模式">
@@ -208,7 +204,7 @@
               </tbody>
             </table>
           </div>
-          <p class="hint">请先点击右上角选择 .pt 权重；系统将按验证集 F1 最优推荐置信度。点击预览右下角图标可对比检测前后全貌。</p>
+          <p class="hint">请先点击右上角选择 .pt 权重，置信度默认 0.223（可手动修改）。点击预览右下角图标可对比检测前后全貌。</p>
         </aside>
       </main>
 

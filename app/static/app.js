@@ -13,6 +13,8 @@
   /** 仅在用户点击日/夜切换时写入；缺省则跟随系统 */
   const LS_THEME = "qi_theme_user";
   const WHEEL_ITEM_H = 36;
+  /** 默认置信度阈值，与 src/predict.py 的 CONF 保持一致 */
+  const DEFAULT_CONF = 0.223;
 
   /** @type {{ id: string, name: string, url: string, path?: string, width: number, height: number, records: object[] | null, verdict: 'pending'|'ok'|'ng', inferenceMs: number | null }[]} */
   let images = [];
@@ -77,7 +79,6 @@
     alertTitle: document.getElementById("alertTitle"),
     alertMessage: document.getElementById("alertMessage"),
     confCurrent: document.getElementById("confCurrent"),
-    confRecommend: document.getElementById("confRecommend"),
     statTotal: document.getElementById("statTotal"),
     statNg: document.getElementById("statNg"),
     statOk: document.getElementById("statOk"),
@@ -134,7 +135,6 @@
 
     choosingWeights = true;
     clearConfField();
-    setRecommendConf("—");
     setConnStatus("选择中…", "busy");
     setButtons();
     try {
@@ -146,7 +146,6 @@
         );
         if (!engineReady) {
           clearConfField();
-          setRecommendConf("—");
         }
         setStatus(engineReady ? "已取消更换权重" : "请选择 .pt 权重文件后再检测");
         return;
@@ -168,7 +167,6 @@
         weightsLabel = "";
         setConnStatus("选择权重文件", "error");
         clearConfField();
-        setRecommendConf("—");
         setStatus(res.error || "权重加载失败");
         showAlert("权重加载失败", res.error || "无法加载所选权重文件。");
         return;
@@ -177,7 +175,6 @@
       choosingWeights = false;
       if (els.connStatus) els.connStatus.disabled = busy;
       setButtons();
-      await refreshRecommendConf();
     } catch (err) {
       setConnStatus(
         engineReady ? weightsStatusText() : "选择权重文件",
@@ -253,19 +250,13 @@
     }
   }
 
-  function setRecommendConf(text, { isNumber = false } = {}) {
-    if (!els.confRecommend) return;
-    els.confRecommend.textContent = text;
-    els.confRecommend.classList.toggle("is-pending", !isNumber);
-  }
-
   function applyConfInput({ silent = false } = {}) {
     if (!els.confCurrent) return false;
     const raw = String(els.confCurrent.value || "").trim();
     if (!raw) {
       if (!silent) {
-        showAlert("置信度为空", "请等待推荐值填入，或手动输入 0 ~ 1 之间的数字。");
-        setStatus("置信度为空，请先填写或等待推荐值");
+        showAlert("置信度为空", "请输入 0 ~ 1 之间的数字（默认 0.223）。");
+        setStatus("置信度为空，请先填写");
       }
       return false;
     }
@@ -290,54 +281,13 @@
     return true;
   }
 
-  async function refreshRecommendConf() {
-    const api = pyApi();
-    if (!api || typeof api.recommend_conf !== "function") {
-      setRecommendConf("—");
-      return null;
-    }
-    clearConfField();
-    setRecommendConf("计算中…");
-    setStatus("正在依据当前权重计算推荐置信度…");
-    if (els.confCurrent) els.confCurrent.disabled = true;
-    try {
-      const res = await api.recommend_conf();
-      if (!res || !res.ok) {
-        setRecommendConf("—");
-        clearConfField();
-        if (res && res.error) setStatus(`推荐置信度计算失败: ${res.error}`);
-        return null;
-      }
-      detectConf = Math.round(Number(res.conf) * 1000) / 1000;
-      refreshConfDisplay();
-      setRecommendConf(formatConf(detectConf), { isNumber: true });
-      if (api && typeof api.set_conf === "function") {
-        api.set_conf(detectConf).catch(() => {});
-      }
-      setStatus(
-        `推荐置信度 ${formatConf(detectConf)}（Box F1≈${
-          res.f1 != null ? Number(res.f1).toFixed(3) : "—"
-        }），已自动填入当前置信度`
-      );
-      return res;
-    } catch (err) {
-      setRecommendConf("—");
-      clearConfField();
-      setStatus(err && err.message ? err.message : String(err));
-      return null;
-    } finally {
-      if (els.confCurrent) els.confCurrent.disabled = busy;
-      setButtons();
-    }
-  }
-
   async function yoloDetect(image) {
     const api = pyApi();
     if (!api || typeof api.detect_image !== "function") {
       throw new Error("请通过 app/desktop.py 启动桌面应用以使用 YOLO 检测");
     }
     if (!applyConfInput({ silent: true }) || detectConf == null) {
-      throw new Error("请先填写置信度，或等待推荐值自动填入");
+      throw new Error("请先填写置信度（0 ~ 1，默认 0.223）");
     }
     const payload = { name: image.name, conf: detectConf };
     if (image.path) {
@@ -361,16 +311,19 @@
         weightsLabel = parts[parts.length - 1] || weightsLabel;
       }
       setConnStatus(weightsStatusText(), "ready");
-      // 推荐值算出前置信度栏保持为空
-      clearConfField();
-      setRecommendConf("计算中…");
-      setStatus(`模型已加载 · ${weightsLabel} · 正在计算推荐置信度…`);
+      // 无推荐功能：填入默认置信度（可手动修改）
+      detectConf = DEFAULT_CONF;
+      refreshConfDisplay();
+      const api = pyApi();
+      if (api && typeof api.set_conf === "function") {
+        api.set_conf(DEFAULT_CONF).catch(() => {});
+      }
+      setStatus(`模型已加载 · ${weightsLabel}`);
     } else if (status && status.need_weights) {
       engineReady = false;
       weightsLabel = "";
       setConnStatus("选择权重文件", "pick");
       clearConfField();
-      setRecommendConf("—");
       setStatus("请先点击右上角选择 .pt 权重文件");
     } else {
       engineReady = false;
@@ -378,7 +331,6 @@
       const err = (status && status.error) || "模型未就绪";
       setConnStatus("选择权重文件", "error");
       clearConfField();
-      setRecommendConf("—");
       setStatus(err);
     }
     setButtons();
@@ -1267,12 +1219,7 @@
     els.fileInput.disabled = busy;
     els.folderInput.disabled = busy;
     if (els.connStatus) els.connStatus.disabled = choosingWeights || busy;
-    if (els.confCurrent) {
-      const recommending =
-        els.confRecommend &&
-        String(els.confRecommend.textContent || "").includes("计算中");
-      els.confCurrent.disabled = busy || choosingWeights || Boolean(recommending);
-    }
+    if (els.confCurrent) els.confCurrent.disabled = busy || choosingWeights;
   }
 
   function renderAll() {
@@ -1442,7 +1389,6 @@
   renderAll();
   applyTheme(resolveInitialTheme());
   clearConfField();
-  setRecommendConf("—");
   setConnStatus("选择权重文件", "pick");
   setStatus("请先点击右上角选择 .pt 权重文件");
 

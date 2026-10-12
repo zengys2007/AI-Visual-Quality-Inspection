@@ -73,7 +73,7 @@ class Api:
         self._window: webview.Window | None = None
         self._model = None  # Ultralytics YOLO 实例，选权重后加载
         self._weights_path: Path | None = None
-        self._conf = float(CONF)  # 当前置信度阈值，可被推荐/手动覆盖
+        self._conf = float(CONF)  # 当前置信度阈值，默认 0.223，可被前端手动覆盖
         self._model_lock = threading.Lock()  # 加载与推理互斥，避免并发换模
         self._load_error: str | None = None
 
@@ -106,55 +106,6 @@ class Api:
             return {"ok": False, "error": "置信度需在 0 ~ 1 之间", "conf": self._conf}
         self._conf = round(conf, 3)
         return {"ok": True, "conf": self._conf}
-
-    def recommend_conf(self) -> dict:
-        """在验证集上按 Box F1 曲线峰值推荐置信度阈值。"""
-        if self._model is None:
-            return {"ok": False, "need_weights": True, "error": "尚未选择权重文件"}
-
-        try:
-            import os
-
-            import numpy as np
-            from ultralytics.utils.metrics import smooth
-
-            # 在 val 划分上评估（不落盘 plots），读取 Box F1–置信度曲线
-            os.chdir(PROJECT_ROOT)
-            data_yaml = PROJECT_ROOT / "configs" / "data.yaml"
-            metrics = self._model.val(
-                data=str(data_yaml),
-                imgsz=IMGSZ,
-                batch=16,
-                split="val",
-                plots=False,
-                verbose=False,
-            )
-            box = metrics.box
-            px = np.asarray(box.px, dtype=float)  # 置信度横轴
-            f1_curve = np.asarray(box.f1_curve, dtype=float)
-            # 多类时对类别维取均值；本项目仅 Surface_Crack
-            if f1_curve.ndim == 1:
-                mean_f1 = f1_curve
-            else:
-                mean_f1 = f1_curve.mean(axis=0)
-            if px.size == 0 or mean_f1.size == 0:
-                return {"ok": False, "error": "验证结果中无 F1 曲线"}
-
-            # 平滑后取峰值对应置信度，写回 self._conf
-            idx = int(smooth(mean_f1, 0.1).argmax())
-            idx = max(0, min(idx, len(px) - 1))
-            conf = round(float(px[idx]), 3)
-            f1 = round(float(mean_f1[idx]), 4)
-            self._conf = conf
-            return {
-                "ok": True,
-                "conf": conf,
-                "f1": f1,
-                "weights": str(self._weights_path) if self._weights_path else "",
-                "weights_name": self._weights_path.name if self._weights_path else "",
-            }
-        except Exception as exc:  # noqa: BLE001 — 透传给前端
-            return {"ok": False, "error": str(exc)}
 
     def choose_weights(self) -> dict:
         """弹出文件管理器选择 .pt 权重并加载。"""

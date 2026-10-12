@@ -553,37 +553,11 @@ label {
   cursor: wait;
 }
 
-.conf-recommend {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
-  white-space: nowrap;
-  line-height: 1.4;
-}
-
-.conf-recommend em {
-  font-style: normal;
-  font-family: var(--mono);
-  font-weight: 700;
-  color: #1677ff;
-}
-
 html.theme-night .conf-current input,
 body.theme-night .conf-current input {
   background: var(--panel-muted);
   color: var(--ink);
   border-color: var(--line);
-}
-
-html.theme-night .conf-recommend em,
-body.theme-night .conf-recommend em {
-  color: #409cff;
-}
-
-.conf-recommend em.is-pending {
-  color: var(--muted);
-  font-weight: 500;
 }
 
 .btn {
