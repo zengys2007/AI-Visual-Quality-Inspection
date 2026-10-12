@@ -16,11 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # ── 配置（路径均为项目根下的绝对路径）─────────────────
 # 输入
-WEIGHTS = ROOT / "best.pt"
+WEIGHTS = ROOT / "runs" / "segment" / "surface_crack" / "weights" / "best.pt"
 SOURCE = ROOT / "data" / "yolo" / "images" / "val"  # 单张图或文件夹
 
 # 推理参数
-CONF = 0.223
+CONF = 0.2
 IMGSZ = 640
 SAVE = True
 STREAM = True  # 大量图片时省内存

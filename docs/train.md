@@ -9,7 +9,7 @@
 | train | `data/yolo/images/train` + `labels/train` | 已整理的训练样本 |
 | val | `data/yolo/images/val` + `labels/val` | 验证集 |
 
-配置见 `configs/data.yaml`。训练集整理步骤见 [organize_yolo_data.md](./organize_yolo_data.md)。
+配置见 `configs/data.yaml`。
 
 ## 使用前
 
@@ -48,18 +48,7 @@ runs/segment/surface_crack/
   *.jpg        ← 训练过程可视化
 ```
 
-推理前请把 `best.pt` 复制到项目根目录（覆盖），供 [predict.md](./predict.md) 使用：
-
-```bash
-copy runs\segment\surface_crack\weights\best.pt best.pt
-```
-
-## 增量数据后再训
-
-1. 新标注放到 `data/yolo/labels/`，对应原图在 `data/train/`
-2. 运行整理：`.\.venv\Scripts\python.exe src\organize_yolo_data.py`
-3. 再运行：`.\.venv\Scripts\python.exe src\train.py`
-4. 再次把新的 `best.pt` 复制到项目根目录
+预测（[predict.md](./predict.md)）默认直接使用 `runs/segment/surface_crack/weights/best.pt`，无需复制。
 
 ## 常见问题
 

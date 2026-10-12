@@ -4,7 +4,7 @@
 
 ## 使用前
 
-1. 项目根目录有权重文件 `best.pt`（由训练得到的 `runs/segment/surface_crack/weights/best.pt` 复制而来）
+1. 已完成训练，存在权重 `runs/segment/surface_crack/weights/best.pt`
 2. 已安装依赖（虚拟环境中有 `ultralytics`）
 3. 准备待检测图片（单张或文件夹）
 
@@ -39,6 +39,6 @@ CSV 字段说明见 [接口规范.md](./接口规范.md)。
 
 ## 常见问题
 
-- **找不到权重**：确认根目录存在 `best.pt`；或重新从 `runs/segment/surface_crack/weights/best.pt` 复制。
+- **找不到权重**：确认存在 `runs/segment/surface_crack/weights/best.pt`（先完成训练）。
 - **找不到输入**：检查 `SOURCE` 路径是否存在。
-- **重训后要更新推理**：把新的 `best.pt` 再复制到项目根目录覆盖即可。
+- **重训后要更新推理**：直接使用新的 `best.pt` 即可（`WEIGHTS` 默认指向其所在路径）。
